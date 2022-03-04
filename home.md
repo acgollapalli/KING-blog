@@ -1,4 +1,3 @@
-layout: none
+layout: Home
 
 # Latest posts
-{{site.posts.firsjekyll-latest-posts}}
