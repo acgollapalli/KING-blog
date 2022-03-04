@@ -1,5 +1,5 @@
 theme: jekyll-theme-time-machine
 title: Royal Proclamations
 description: A blog about the operating system of royalty! KING
-
+show_downloads: false
 #plugins: jekyll-feed
