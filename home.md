@@ -1,3 +1,4 @@
-layout: Home
-
+```
+layout: home
+```
 # Latest posts
