@@ -1,0 +1,5 @@
+#+TITLE: KING
+#+OPTIONS: toc:nil
+
+* Introduction
+This is a place for my thoughts on a future operating system: KING, which stands for KING is not Genera. Naturally, it's quite inspired by Symbolics Genera.
