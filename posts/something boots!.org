@@ -1,0 +1,54 @@
+#+BEGIN_EXPORT html
+---
+layout: post
+title: something boots!
+---
+#+TITLE: something boots!
+#+END_EXPORT
+#+OPTIONS: toc:nil
+#+EXPORT_FILE_NAME: ../_POSTS/2022-03-08-something-boots.md
+
+* Progress report
+I got something to boot last night.
+I started with the arm assembly hello world [[http://kerseykyle.com/articles/ARM-assembly-hello-world][here]]. It looks something like this:
+
+#+BEGIN_SRC s
+/*hello.s*/
+.text
+.global _start
+_start:
+    mov r0, #1
+    ldr r1, =message
+    ldr r2, =len
+    mov r7, #4
+    svc 0
+
+    mov r7, #1
+    svc 0
+
+.data
+message:
+    .asciz "hello world\n"
+len = .-message
+#+END_SRC
+
+Install =binutils-arm-linux-gnueabihf= then:
+
+#+begin_src bash
+arm-linux-gnueabihf-as hello.s -o hello.o
+arm-linux-gnueabihf-ld hello.o -o hello
+#+end_src
+
+And now run it!
+
+#+begin_src bash
+qemu-aarch64 ./hello
+#+end_src
+
+But that's not very satsifying right? We want something that runs on bare metal. We're writing an operating system, right? (Yeah, yeah, an OS is a collection of things that don't fit into a language... there shouldn't be one, and so on and so forth.) A Lisp from scratch, in the sense of LISP being the primary model of computation, where shutting down your lisp meant shutting down your computer, because to engage in computing was to compute, not merely to use an appliance as one uses a dishwasher.
+
+And this does not run on bare metal. It presumes an operativing
+
+Anyway. So I went further:
+
+We started with OS Dev's handy dandy [[https://wiki.osdev.org/QEMU_AArch64_Virt_Bare_Bones][QEMU AArch64 Virt Bare Bones]] explanation. Now, I'm really not interested in writing a whole lot of C. I'd like to go from assembly to lisp as quickly as possible with no intermediaries. So
