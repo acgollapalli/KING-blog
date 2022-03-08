@@ -6,7 +6,7 @@ title: something boots!
 #+TITLE: something boots!
 #+END_EXPORT
 #+OPTIONS: toc:nil
-#+EXPORT_FILE_NAME: ../_POSTS/2022-03-08-something-boots.md
+#+EXPORT_FILE_NAME: ../_posts/2022-03-08-something-boots.md
 
 * Progress report
 I got something to boot last night.
@@ -42,8 +42,8 @@ _start:
 Install =binutils-arm-linux-gnueabihf= then:
 
 #+begin_src bash
-arm-linux-gnueabihf-as hello.s -o hello.o
-arm-linux-gnueabihf-ld hello.o -o hello
+aarch64-linux-gnueabihf-as hello.s -o hello.o
+aarch64-linux-gnueabihf-ld hello.o -o hello
 #+end_src
 
 And now run it!
@@ -58,4 +58,177 @@ And this does not run on bare metal. It presumes an operating system.
 
 Anyway. So let's go further:
 
-I started with OS Dev's handy dandy [[https://wiki.osdev.org/QEMU_AArch64_Virt_Bare_Bones][QEMU AArch64 Virt Bare Bones]] explanation. Now, I'm really not interested in writing a whole lot of C. I'd like to go from assembly to lisp as quickly as possible with no intermediaries.
+I started with OS Dev's handy dandy [[https://wiki.osdev.org/QEMU_AArch64_Virt_Bare_Bones][QEMU AArch64 Virt Bare Bones]] explanation. Now, I'm really not interested in writing a whole lot of C. I'd like to go from assembly to lisp as quickly as possible with no intermediaries. So let's just look at the assembly to find the relevant instructions. Here's what the original kernel.c looks like:
+#+begin_src c
+#include <stdint.h>
+
+volatile uint8_t *uart = (uint8_t *) 0x09000000;
+
+void putchar(char c) {
+    *uart = c;
+}
+
+void print(const char *s) {
+    while(*s != '\0') {
+        putchar(*s);
+        s++;
+    }
+}
+
+void kmain(void) {
+     print("Hello world!\n");
+}
+#+end_src
+
+And if you run  =aarch64-elf-gcc -ffreestanding -c kernel.c  -S= to look at the assembly you'll see a lot of junk. And I didn't understand that junk, so I pared kernel.c down to something approachable.
+
+#+begin_src c
+#include <stdint.h>
+
+volatile uint8_t *uart = (uint8_t *) 0x09000000;
+
+void kmain(void) {
+    *uart = 'h';
+    //*uart = 'e';
+    //*uart = 'l';
+    //*uart = 'l';
+    //*uart = 'o';
+}
+#+end_src
+
+And now we get this significantly more approachable bit of assembly:
+#+begin_src s
+	.arch armv8-a
+	.file	"kernel.c"
+	.text
+	.global	uart
+	.data
+	.align	3
+	.type	uart, %object
+	.size	uart, 8
+uart:
+	.xword	150994944
+	.text
+	.align	2
+	.global	kmain
+	.type	kmain, %function
+kmain:
+.LFB0:
+	.cfi_startproc
+	adrp	x0, uart
+	add	x0, x0, :lo12:uart
+	ldr	x0, [x0]
+	mov	w1, 104
+	strb	w1, [x0]
+	nop
+	ret
+	.cfi_endproc
+.LFE0:
+	.size	kmain, .-kmain
+	.ident	"GCC: (Ubuntu 11.2.0-5ubuntu1) 11.2.0"
+	.section	.note.GNU-stack,"",@progbits
+#+end_src
+
+Now, that's quite alot. I don't think we can simplify too much further than that though.
+
+There are a few relevant bits to understand here:
+#+begin_src s
+    .text
+    .global uart
+uart:
+    .xword 150994944
+#+end_src
+
+Now, 0x09000000 is the hex representation of 150994944, so it looks like =as= converted it to decimal here. So this snippet defines the address for the register uart... or something (don't ask me, I'm figuring it out as I go!)
+
+#+begin_src s
+	adrp	x0, uart
+	add	x0, x0, :lo12:uart
+	ldr	x0, [x0]
+	mov	w1, 104
+	strb	w1, [x0]
+#+end_src
+
+I've tried removing particular instructions from this segment, and they all seem to be essential. The strb is what does the actual reading. [[https://stackoverflow.com/a/25508561][This stack overflow post]] was helpful, even though it's for an older form of ARM assembly.
+
+#+begin_src s
+    nop
+    ret
+#+end_src
+
+I think this is how you end programs.
+
+So I tried to take it to bare essentials
+#+begin_src s
+/* hello_1_5 /*
+    .text
+    .global uart
+uart:
+    .xword 150994944
+
+    .text
+    .global _start
+_start:
+    adrp x0, uart
+    add x0, x0, :lo12:uart
+    ldr x0, [x0]
+    mov w1, 104
+    strb w1, [x0]
+
+    nop
+    ret
+#+end_src
+
+#+begin_src s
+aarch64-linux-gnu-as hello_1_5.s -o hello_1_5.o && aarch64-linux-gnu-ld hello_1_5.o -o hello_1_5
+#+end_src
+
+#+begin_src s
+qemu-system-aarch64 -machine virt -cpu cortex-a57 -kernel hello_1_5 -nographic
+#+end_src
+
+And it prints H!
+
+Now let's throw a couple more things in. With the =.text= and the =.local= declarations we can define procedures and/or variables; =ldrb= can read from the uart register the same way that =strb= writes to it; and procedures defined in assembly can be called recursively. What does that spell?! A listener loop!
+
+#+begin_src
+/* hello2.s */
+    .text
+    .global uart
+uart:
+    .xword 150994944
+
+    .text
+    .local listen
+listen:
+    /* let's listen for a character typed in the terminal*/
+    adrp x0, uart
+    add x0, x0, :lo12:uart
+    ldr x0, [x0]
+    ldrb w1, [x0] /* store the read character into w1 */
+
+    adrp x0, uart
+    add x0, x0, :lo12:uart
+    ldr x0, [x0]
+    strb w1, [x0] /* echo the character stored in w1 back to uart */
+
+    b listen /* recur, b means branch, which I think is a procedure call */
+
+    .text
+    .global _start
+_start:
+    adrp x0, uart
+    add x0, x0, :lo12:uart
+    ldr x0, [x0]
+    mov w1, 104
+    strb w1, [x0]
+
+    b listen /* start the listener loop */
+
+    nop
+    ret
+#+END_SRC
+
+And now when we build that, we get a program that prints h, and then when you type something in the terminal it will echo it back to you.
+
+We have I/O running on (virtual) bare metal!
