@@ -1,14 +1,14 @@
 #+BEGIN_EXPORT html
 ---
 layout: post
-title: something boots!
+title: Something Boots!
 ---
 #+END_EXPORT
 #+TITLE: something boots!
 #+OPTIONS: toc:nil
 #+EXPORT_FILE_NAME: ../_posts/2022-03-08-something-boots.md
 
-* Progress report
+* Progress report: Hello World in Aarch64 Assembly on Bare Metal
 I got something to boot last night.
 ** Part 1: Hello World! (in virtual userspace)
 I started with the arm assembly hello world [[https://peterdn.com/post/2020/08/22/hello-world-in-arm64-assembly/][here]]. It looks something like this:

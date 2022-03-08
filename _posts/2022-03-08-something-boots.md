@@ -1,10 +1,10 @@
 ---
 layout: post
-title: something boots!
+title: Something Boots!
 ---
 
 
-# Progress report
+# Progress report: Hello World in Aarch64 Assembly on Bare Metal
 
 I got something to boot last night.
 
