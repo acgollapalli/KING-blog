@@ -225,9 +225,9 @@ listen:
     ldr x0, [x0]
     /* now we know that the actual address for uart is in x0 */
 
-    ldrb w1, [x0] /* store the read character into w1 */
+    ldrb w1, [x0] /* load the read character into w1 from uart */
 
-    strb w1, [x0] /* echo the character stored in w1 back to uart */
+    strb w1, [x0] /* echo the character loaded in w1 back to uart */
 
     b listen /* recur, b means branch, which I think is a procedure call */
 
