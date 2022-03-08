@@ -7,6 +7,10 @@ title: something boots!
 # Progress report
 
 I got something to boot last night.
+
+
+## Part 1: Hello World! (in virtual userspace)
+
 I started with the arm assembly hello world [here](https://peterdn.com/post/2020/08/22/hello-world-in-arm64-assembly/). It looks something like this:
 
     /*hello.s*/
@@ -48,6 +52,9 @@ But that&rsquo;s not very satsifying right? Those svc instructions are interrupt
 And this does not run on bare metal. It presumes an operating system.
 
 Anyway. So let&rsquo;s go further:
+
+
+## Part 2: h(ello world!) on Bare (Virtual) Metal
 
 I started with OS Dev&rsquo;s handy dandy [QEMU AArch64 Virt Bare Bones](https://wiki.osdev.org/QEMU_AArch64_Virt_Bare_Bones) explanation. Now, I&rsquo;m really not interested in writing a whole lot of C. I&rsquo;d like to go from assembly to lisp as quickly as possible with no intermediaries. So let&rsquo;s just look at the assembly to find the relevant instructions. Here&rsquo;s what the original kernel.c looks like:
 
@@ -135,12 +142,12 @@ Now, 0x09000000 is the hex representation of 150994944, so it looks like `as` co
 
 I&rsquo;ve tried removing particular instructions from this segment, and they all seem to be essential. The strb is what does the actual reading. [This stack overflow post](https://stackoverflow.com/a/25508561) was helpful, even though it&rsquo;s for an older form of ARM assembly.
 
+I think this is how you end procedures:
+
     nop
     ret
 
-I think this is how you end programs.
-
-So I tried to take it to bare essentials
+So I tried to take it to bare essentials and this is what I got:
 
     /* hello_1_5 /*
         .text
@@ -165,7 +172,10 @@ So I tried to take it to bare essentials
 
     qemu-system-aarch64 -machine virt -cpu cortex-a57 -kernel hello_1_5 -nographic
 
-And it prints H!
+And it prints `h`!
+
+
+## Part 3: prompt (=>) hello world!
 
 Now let&rsquo;s throw a couple more things in. With the `.text` and the `.local` declarations we can define procedures and/or variables; `ldrb` can read from the uart register the same way that `strb` writes to it; and procedures defined in assembly can be called recursively. What does that spell?! A listener loop!
 
