@@ -238,7 +238,7 @@ Now let&rsquo;s throw a couple more things in. With the `.text` and the `.local`
         nop
         ret
 
-And now when we build that, we get a program that prints h, and then when you type something in the terminal it will echo it back to you.
+And now when we build that, we get a program that prints `=>` for a mock prompt, and then echoes whatever you type back to you. In other words&#x2026;
 
 We have I/O running on (virtual) bare metal!
 
