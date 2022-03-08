@@ -1,6 +1,6 @@
 # Setup
 title:               KING blog
-tagline:             'KING Is Not Genera but it will be'
+tagline:             'KING Is Not Genera, but it will be'
 description:         'KING Is Not Genera will be KING OS'
 url:                 https://acgollapalli.github.io/KING-blog/
 baseurl:             ''
@@ -9,9 +9,9 @@ permalink:           pretty
 
 # About/contact
 author:
-  name:              Mark Otto
-  url:               https://twitter.com/mdo
-  email:             markdotto@gmail.com
+  name:              A. Caleb Gollapalli
+  url:               https://acgollapalli.github.io/KING-blog/
+  email:             acgollapalli@protonmail.com
 
 # Gems
 plugins:
