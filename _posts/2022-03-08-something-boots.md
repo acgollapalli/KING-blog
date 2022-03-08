@@ -155,6 +155,7 @@ So I tried to take it to bare essentials
         adrp x0, uart
         add x0, x0, :lo12:uart
         ldr x0, [x0]
+    
         mov w1, 104
         strb w1, [x0]
     
@@ -169,7 +170,7 @@ And it prints H!
 
 Now let&rsquo;s throw a couple more things in. With the `.text` and the `.local` declarations we can define procedures and/or variables; `ldrb` can read from the uart register the same way that `strb` writes to it; and procedures defined in assembly can be called recursively. What does that spell?! A listener loop!
 
-    /* hello2.s */
+    /* hello_2.s */
         .text
         .global uart
     uart:
@@ -182,11 +183,10 @@ Now let&rsquo;s throw a couple more things in. With the `.text` and the `.local`
         adrp x0, uart
         add x0, x0, :lo12:uart
         ldr x0, [x0]
+        /* now we know that the actual address for uart is in x0 */
+    
         ldrb w1, [x0] /* store the read character into w1 */
     
-        adrp x0, uart
-        add x0, x0, :lo12:uart
-        ldr x0, [x0]
         strb w1, [x0] /* echo the character stored in w1 back to uart */
     
         b listen /* recur, b means branch, which I think is a procedure call */
@@ -197,8 +197,12 @@ Now let&rsquo;s throw a couple more things in. With the `.text` and the `.local`
         adrp x0, uart
         add x0, x0, :lo12:uart
         ldr x0, [x0]
-        mov w1, 104
-        strb w1, [x0]
+    
+        mov w1, 61 /* 61 is '=' */
+        mov w2, 62 /* 62 is '>' */
+    
+        strb w1, [x0] /* let's print our mock prompt */
+        strb w2, [x0]
     
         b listen /* start the listener loop */
     
