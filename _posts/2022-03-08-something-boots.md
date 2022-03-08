@@ -125,7 +125,10 @@ And now we get this significantly more approachable bit of assembly:
 
 Now, that&rsquo;s quite alot. I don&rsquo;t think we can simplify too much further than that though.
 
-There are a few relevant bits to understand here:
+There are a few relevant bits to understand here.
+
+
+### Declaring the UART register
 
         .text
         .global uart
@@ -134,18 +137,35 @@ There are a few relevant bits to understand here:
 
 Now, 0x09000000 is the hex representation of 150994944, so it looks like `as` converted it to decimal here. So this snippet defines the address for the register uart&#x2026; or something (don&rsquo;t ask me, I&rsquo;m figuring it out as I go!)
 
+
+### Getting the Correct Register for UART into x0
+
     adrp	x0, uart
     add	x0, x0, :lo12:uart
     ldr	x0, [x0]
     mov	w1, 104
     strb	w1, [x0]
 
-I&rsquo;ve tried removing particular instructions from this segment, and they all seem to be essential. The strb is what does the actual reading. [This stack overflow post](https://stackoverflow.com/a/25508561) was helpful, even though it&rsquo;s for an older form of ARM assembly.
+I&rsquo;ve tried removing particular instructions from this segment, and they all seem to be essential.
 
-I think this is how you end procedures:
+
+### Actually Printing a Character to UART
+
+    mov	w1, 104
+    strb	w1, [x0]
+
+The strb is what does the actual reading. [This stack overflow post](https://stackoverflow.com/a/25508561) was helpful, even though it&rsquo;s for an older form of ARM assembly.
+
+
+### Ending the Procedure(?)
 
     nop
     ret
+
+I think this is how you end procedures.
+
+
+### Putting it all Together
 
 So I tried to take it to bare essentials and this is what I got:
 
