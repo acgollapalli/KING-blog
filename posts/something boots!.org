@@ -10,26 +10,33 @@ title: something boots!
 
 * Progress report
 I got something to boot last night.
-I started with the arm assembly hello world [[http://kerseykyle.com/articles/ARM-assembly-hello-world][here]]. It looks something like this:
+I started with the arm assembly hello world [[https://peterdn.com/post/2020/08/22/hello-world-in-arm64-assembly/][here]]. It looks something like this:
 
 #+BEGIN_SRC s
 /*hello.s*/
-.text
-.global _start
-_start:
-    mov r0, #1
-    ldr r1, =message
-    ldr r2, =len
-    mov r7, #4
-    svc 0
-
-    mov r7, #1
-    svc 0
-
 .data
-message:
-    .asciz "hello world\n"
-len = .-message
+
+/* Data segment: define our message string and calculate its length. */
+msg:
+    .ascii        "Hello, ARM64!\n"
+len = . - msg
+
+.text
+
+/* Our application's entry point. */
+.globl _start
+_start:
+    /* syscall write(int fd, const void *buf, size_t count) */
+    mov     x0, #1      /* fd := STDOUT_FILENO */
+    ldr     x1, =msg    /* buf := msg */
+    ldr     x2, =len    /* count := len */
+    mov     w8, #64     /* write is syscall #64 */
+    svc     #0          /* invoke syscall */
+
+    /* syscall exit(int status) */
+    mov     x0, #0      /* status := 0 */
+    mov     w8, #93     /* exit is syscall #93 */
+    svc     #0          /* invoke syscall */
 #+END_SRC
 
 Install =binutils-arm-linux-gnueabihf= then:
@@ -45,10 +52,10 @@ And now run it!
 qemu-aarch64 ./hello
 #+end_src
 
-But that's not very satsifying right? We want something that runs on bare metal. We're writing an operating system, right? (Yeah, yeah, an OS is a collection of things that don't fit into a language... there shouldn't be one, and so on and so forth.) A Lisp from scratch, in the sense of LISP being the primary model of computation, where shutting down your lisp meant shutting down your computer, because to engage in computing was to compute, not merely to use an appliance as one uses a dishwasher.
+But that's not very satsifying right? Those svc instructions are interrupts to invoke syscalls. Syscalls that are handled by an operating system. We want something that runs on bare metal, without an operating system. I mean, we're writing an operating system, right? (Yeah, yeah, an OS is a collection of things that don't fit into a language... there shouldn't be one, and so on and so forth.) A bare metal lisp, a lisp from scratch, in the sense of LISP being the primary model of computation, where shutting down your lisp meant shutting down your computer, because to engage in computing was to compute, not merely to use an appliance as one uses a dishwasher.
 
-And this does not run on bare metal. It presumes an operativing
+And this does not run on bare metal. It presumes an operating system.
 
-Anyway. So I went further:
+Anyway. So let's go further:
 
-We started with OS Dev's handy dandy [[https://wiki.osdev.org/QEMU_AArch64_Virt_Bare_Bones][QEMU AArch64 Virt Bare Bones]] explanation. Now, I'm really not interested in writing a whole lot of C. I'd like to go from assembly to lisp as quickly as possible with no intermediaries. So
+I started with OS Dev's handy dandy [[https://wiki.osdev.org/QEMU_AArch64_Virt_Bare_Bones][QEMU AArch64 Virt Bare Bones]] explanation. Now, I'm really not interested in writing a whole lot of C. I'd like to go from assembly to lisp as quickly as possible with no intermediaries.
