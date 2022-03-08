@@ -134,7 +134,9 @@ kmain:
 
 Now, that's quite alot. I don't think we can simplify too much further than that though.
 
-There are a few relevant bits to understand here:
+There are a few relevant bits to understand here.
+
+*** Declaring the UART register
 #+begin_src s
     .text
     .global uart
@@ -144,6 +146,7 @@ uart:
 
 Now, 0x09000000 is the hex representation of 150994944, so it looks like =as= converted it to decimal here. So this snippet defines the address for the register uart... or something (don't ask me, I'm figuring it out as I go!)
 
+*** Getting the Correct Register for UART into x0
 #+begin_src s
 	adrp	x0, uart
 	add	x0, x0, :lo12:uart
@@ -152,14 +155,24 @@ Now, 0x09000000 is the hex representation of 150994944, so it looks like =as= co
 	strb	w1, [x0]
 #+end_src
 
-I've tried removing particular instructions from this segment, and they all seem to be essential. The strb is what does the actual reading. [[https://stackoverflow.com/a/25508561][This stack overflow post]] was helpful, even though it's for an older form of ARM assembly.
+I've tried removing particular instructions from this segment, and they all seem to be essential.
 
-I think this is how you end procedures:
+*** Actually Printing a Character to UART
+#+begin_src s
+	mov	w1, 104
+	strb	w1, [x0]
+#+end_src
+
+The strb is what does the actual reading. [[https://stackoverflow.com/a/25508561][This stack overflow post]] was helpful, even though it's for an older form of ARM assembly.
+
+*** Ending the Procedure(?)
 #+begin_src s
     nop
     ret
 #+end_src
+I think this is how you end procedures.
 
+*** Putting it all Together
 So I tried to take it to bare essentials and this is what I got:
 #+begin_src s
 /* hello_1_5 /*
