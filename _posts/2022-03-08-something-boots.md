@@ -2,7 +2,6 @@
 layout: post
 title: something boots!
 ---
-#+TITLE: something boots!
 
 
 # Progress report

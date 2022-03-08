@@ -3,8 +3,8 @@
 layout: post
 title: something boots!
 ---
-#+TITLE: something boots!
 #+END_EXPORT
+#+TITLE: something boots!
 #+OPTIONS: toc:nil
 #+EXPORT_FILE_NAME: ../_posts/2022-03-08-something-boots.md
 
