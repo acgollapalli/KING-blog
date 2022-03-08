@@ -1,0 +1,20 @@
+#+BEGIN_EXPORT html
+---
+layout: post
+title: Introducing KING
+---
+#+END_EXPORT
+
+#+TITLE: U Boot
+#+OPTIONS: toc:nil
+#+EXPORT_FILE_NAME: ../_posts/2022-03-04-u-boot.md
+
+* Progress report
+Well I got u-boot, a bootloader for ARM systems (and others) to run in QEMU
+After installing the requisite dependencies and cross-compiling u-boot for arm, I ran it, and it ran.
+#+BEGIN_SRC bash
+qemu-system-aarch64 -curses -machine virt -cpu cortex-a57 -bios u-boot.bin
+#+END_SRC
+You can hit Esc+1 to get into QEMU's monitoring interface, and Esc+2 to get into a u-boot command line. Note that you have to hold it for a couple seconds, and it may take a couple tries for QEMU to respond. I don't know why this is. But the point is I can emulate an ARM processor and bootloader!
+
+Now I just have to write something for it to boot.
