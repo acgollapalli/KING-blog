@@ -1,7 +1,7 @@
 #+BEGIN_EXPORT html
 ---
 layout: post
-title: Introducing KING
+title: U Boot, I Boot, We All Boot for U Boot!
 ---
 #+END_EXPORT
 

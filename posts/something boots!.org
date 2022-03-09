@@ -13,7 +13,7 @@ I got something to boot last night.
 ** Part 1: Hello World! (in virtual userspace)
 I started with the arm assembly hello world [[https://peterdn.com/post/2020/08/22/hello-world-in-arm64-assembly/][here]]. It looks something like this:
 
-#+BEGIN_SRC s
+#+BEGIN_SRC asm
 /*hello.s*/
 .data
 

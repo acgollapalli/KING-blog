@@ -2,7 +2,7 @@
 title:               KING blog
 tagline:             'KING Is Not Genera, but it will be'
 description:         'KING Is Not Genera will be KING OS'
-url:                 https://acgollapalli.github.io/KING-blog/
+url:                 https://acgollapalli.github.io/KING-blog
 baseurl:             ''
 paginate:            5
 permalink:           pretty
