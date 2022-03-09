@@ -1,7 +1,16 @@
 # Setup
 title:               KING blog
 tagline:             'KING Is Not Genera, but it will be'
-description:         'KING Is Not Genera will be KING OS'
+description:         >
+                     (defλ Ξ<br>
+                     &nbsp;&nbsp;[x]<br>
+                     &nbsp;&nbsp;(χ <br>
+                     &nbsp;&nbsp;&nbsp;&nbsp;(φ? x) x<br>
+                     &nbsp;&nbsp;&nbsp;&nbsp;(∪ <br>
+                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(ζ? x)<br>
+                     &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Λ? (α x))) (Ξ (Λ x (ω x)))<br>
+                     &nbsp;&nbsp;&nbsp;&nbsp;(⊌? x) (↦ Ξ x))) <br><br>
+                     (≝ eval Ξ)
 url:                 https://acgollapalli.github.io/KING-blog
 baseurl:             ''
 paginate:            5
