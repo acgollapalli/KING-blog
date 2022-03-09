@@ -1,0 +1,10 @@
+#+BEGIN_EXPORT html
+---
+layout: page
+title: About
+---
+#+END_EXPORT
+#+TITLE: Introducing KING
+#+OPTIONS: toc:nil
+
+For now please see the [[../2022/03/03/introducing-king/][introductory post]]. More to come in the future.
