@@ -236,7 +236,6 @@ a.sidebar-nav-item:focus {
 #sidebar-checkbox:focus ~ .sidebar-toggle,
 #sidebar-checkbox:checked ~ .sidebar-toggle {
   color: #fff;
-  opacity: 0%;
   background-color: #555;
 }
 
@@ -289,11 +288,16 @@ a.sidebar-nav-item:focus {
   visibility: visible;
 }
 #sidebar-checkbox:checked ~ .sidebar,
-#sidebar-checkbox:checked ~ .wrap,
-#sidebar-checkbox:checked ~ .sidebar-toggle {
+#sidebar-checkbox:checked ~ .wrap {
   -webkit-transform: translateX(14rem);
       -ms-transform: translateX(14rem);
           transform: translateX(14rem);
+}
+
+#sidebar-checkbox:checked ~ .sidebar-toggle {
+  -webkit-transform: translateX(11.23rem);
+      -ms-transform: translateX(11.23rem);
+          transform: translateX(11.23rem);
 }
 
 
