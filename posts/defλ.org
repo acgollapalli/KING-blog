@@ -4,7 +4,7 @@ layout: post
 title: defλ
 ---
 #+END_EXPORT
-#+TITLE: defλ
+#+TITLE: defλ Part 1
 #+OPTIONS: toc:nil
 #+EXPORT_FILE_NAME: ../_posts/2022-10-19-defλ.md
 
@@ -94,7 +94,8 @@ some-fn:
 #+end_src
 
 [[https://diveintosystems.org/book/C9-ARM64/functions.html][This resource]] was very helpful in understanding how one might handle procedure calls.
-
+** Caveat Hacker
+I haven't run any of the code in this post. We won't really be able to until we get a REPL going. So, if you're reading this, and see an error, please feel free to mention it in the github repo.
 * cons (ζ)
 Let's start simple, the absolute simplest we can get: A cons pair.
 
@@ -288,7 +289,7 @@ cond:
     str x0, x7    /* put the pointer to our list in x0
                      so car knows the location of our argument
                      list.*/
-    movnq [LR], [PC, #-8] /* set the link register so car
+    movnq [LR], [PC, #8] /* set the link register so car
                              knows where to return.*/
     cbnz x2, car  /* call car. the pointer to our first
                      conditional will come back in x0 */
@@ -310,12 +311,12 @@ cond:
 
  /* If conditional was truthy get the resultant form, which is the second
     item in our argument list. Returns in x0. */
-    movnq [LR], [PC, #-8]
+    movnq [LR], [PC, #8]
     cbnz x2, car
 
  /* If the conditional was not truthy, get the arglist minus the
     initial conditional and result form */
-    movnq [LR], [PC, #-8]
+    movnq [LR], [PC, #8]
     cbz x2, cdr
 
  /* If the conditional was not truthy, set the register for the
@@ -328,11 +329,14 @@ cond:
  /* if the conditional was not truthy, recur */
     cbnz x2, cond
 
- /* evaluation of the returned value goes here. It'll return in x0*/
+ /* evaluation of the return value goes here. It'll return in x0*/
 
- /* return to point in x30 */
+ /* return to calling function */
     ret
 #+end_src
+
+* Conclusion
+Well, this concludes Part 1 of our definition of a preliminary lisp. In Part 2, we'll define the rest of our primitives. In Part 3 we'll actually try and get a REPL going and evaluate some code[fn:3]!
 
 * Footnotes
 [fn:1]
@@ -340,3 +344,6 @@ cond:
 
 [fn:2]
 We're not going to worry about memory allocation right now, or heaps and stacks, (although Henry Baker has some [[https://dl.acm.org/doi/pdf/10.1145/130854.130858][interesting]] [[https://dl.acm.org/doi/pdf/10.1145/214448.214454][things]] to say on the matter). Why? Because it's a big topic that I'm not ready to approach. I do have some ideas, and it has ramifications to what we're going to do in this post, but suffice to say: where we're going, we don't need heaps!
+
+[fn:3]
+And by evaluate some code, I mean find out just how glaringly wrong the code in Part 1 and 2 actually is!
