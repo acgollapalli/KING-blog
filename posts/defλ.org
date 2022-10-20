@@ -71,11 +71,6 @@ Becomes something like:
     .text
     .global some-fn
 some-fn:
-    /* store frame pointer and return address on stack */
-    stp x29, x30 [sp, #-32]!
-    /* store stack pointer as new frame pointer */
-    mov x29, [sp]
-
     /* <evaluation of arguments goes here> */
 
     /* store all the arguments on the stack*/
@@ -95,7 +90,6 @@ some-fn:
 
     /* pointer to return value is placed in x0 by compute-return-value */
 
-    ldp x29, x30, [sp], #112 /* get back frame pointer and return address */
     ret /* return to point in x30 */
 #+end_src
 
@@ -158,11 +152,6 @@ So this:
     .text
     .global cons
 cons:
- /* store frame pointer and return address on stack */
-    stp x29, x30 [sp, #-16]!
- /* store stack pointer as new frame pointer */
-    mov x29, [sp]
-
  /* store the arguments on the stack*/
     stp x0, x1 [sp, #-16]!
 
@@ -176,8 +165,6 @@ cons:
     bits to #b011. Hence, we add 35.*/
     add x0, [sp], #35
 
- /* get back frame pointer and return address */
-    ldp x29, x30, [sp], #32
     ret /* return to point in x30 */
 #+end_src
 
@@ -192,11 +179,6 @@ The procedure for =car= should return the pointer stored in the first 64 bits of
     .text
     .global car
 car:
- /* store frame pointer and return address on stack */
-    stp x29, x30 [sp, #-16]!
- /* store stack pointer as new frame pointer */
-    mov x29, [sp]
-
   /* <evaluation of arguments goes here>
     We'll put the pointers to evaluated arguments
     in the same register x0 as they came to us.
@@ -210,8 +192,6 @@ car:
     sub x0, x0, #3
     ldr x0, x0
 
- /* get back frame pointer and return address */
-    ldp x29, x30, [sp], #16
     ret /* return to point in x30 */
 #+end_src
 
@@ -227,11 +207,6 @@ Becomes this:
     .text
     .global cdr
 cdr:
- /* store frame pointer and return address on stack */
-    stp x29, x30 [sp, #-16]!
- /* store stack pointer as new frame pointer */
-    mov x29, [sp]
-
   /* <evaluation of arguments goes here>
     We'll put the pointers to evaluated arguments
     in the same register x0 as they came to us.
@@ -245,8 +220,6 @@ cdr:
     add x0, x0, #5
     ldr x0, x0
 
- /* get back frame pointer and return address */
-    ldp x29, x30, [sp], #16
     ret /* return to point in x30 */
 #+end_src
 As I said, similar.
@@ -263,10 +236,6 @@ Taking only the case of two arguments, we can use something along these lines:
     .text
     .global eq
 eq:
- /* store frame pointer and return address on stack */
-    stp x29, x30 [sp, #-16]!
- /* store stack pointer as new frame pointer */
-    mov x29, [sp]
  /* store the arguments on the stack*/
     stp x0, x1 [sp, #-16]!
 
@@ -281,8 +250,6 @@ eq:
     moveq x0, #10 /* conditional set x0 to #b1010 if equal */
     movnq x0 #2 /* conditional set x0 to #b0010 if not equal */
 
- /* get back frame pointer and return address */
-    ldp x29, x30, [sp], #16
     ret /* return to point in x30 */
 
 #+end_src
@@ -295,32 +262,74 @@ Cond is a procedure that takes a list of those functions that takes an unlimited
  (condition2 args) (result2 args)
  :else (default-result))
 #+end_src
-Now, we haven't had a procedure that takes potentially more arguements than there are registers before, so we need to define how we're going to handle that.
+Now, we haven't had a procedure that takes potentially more arguments than there are registers before, so we need to decide how we're going to handle that. We'll define it properly when we define =apply (Λ)=. But for now we'll state it like this:
++ For procedures which take an unlimited number of arguments, it must receive a list of arguments in register x7.
 #+begin_src asm
     .text
-    .global eq
-eq:
-    stp x29, x30 [sp, #-16]!
- /* store stack pointer as new frame pointer */
-    mov x29, [sp]
- /* store the arguments on the stack*/
-    stp x0, x1 [sp, #-16]!
+    .global cond
+cond:
+ /* store the stack pointer and return address */
+    stp x29, x30, [sp], #-16
 
-  /* <evaluation of arguments goes here>
-    We'll put the pointers to evaluated arguments
-    in the same register x0 as they came to us.
-    This is also where we would check the tag of
-    the pointer given to us in x0, to make sure it
-    points to a cons pair.*/
+ /* Check if the argument list in x7 is nil. */
+    cmp x7, #4    /* #4 is the decimal notation for #b0010
+                     which is our tagged pointer for nil*/
 
-    cmp x0, x1 /* this sets a condition flag */
-    moveq x0, #10 /* conditional set x0 to #b1010 if equal */
-    movnq x0 #2 /* conditional set x0 to #b0010 if not equal */
+ /* Set our return value to zero if the arglist is nil */
+    moveq x2, #0  /* put a zero value in x0 for the
+                     conditional to follow if args are nil */
+    moveq x0, #4  /* put nil in x0 if the args are nil */
 
- /* get back frame pointer and return address */
+ /* Get the first conditional argument if the args are not nil */
+    movnq x2, #1  /* put a nonzero value in x0 for the
+                     conditional to follow if args not nil*/
+    str x0, x7    /* put the pointer to our list in x0
+                     so car knows the location of our argument
+                     list.*/
+    movnq [LR], [PC, #-8] /* set the link register so car
+                             knows where to return.*/
+    cbnz x2, car  /* call car. the pointer to our first
+                     conditional will come back in x0 */
+
+ /* evaluation of the conditional in x0 goes here */
+
+ /* Check if the evaluated conditional in x0 is truthy */
+    cmp x0, #4    /* remember #4 is #b0010 which is nil */
+
+ /* If truthy, set x2 to non-zero for following conditional branch,
+    otherwise set x2 to zero.*/
+    movnq x2, #1
+    moveq x2, #0
+
+ /* We need the cdr for the arglist regardless of whether our
+    conditional was truthy, so let's get that */
+    movnq x0, x7  /* store the pointer to our list in x0 */
+    br x2, cdr    /* get the cdr to our argument list, returns in x0*/
+
+ /* If conditional was truthy get the resultant form, which is the second
+    item in our argument list. Returns in x0. */
+    movnq [LR], [PC, #-8]
+    cbnz x2, car
+
+ /* If the conditional was not truthy, get the arglist minus the
+    initial conditional and result form */
+    movnq [LR], [PC, #-8]
+    cbz x2, cdr
+
+ /* If the conditional was not truthy, set the register for the
+    arglist to the new arglist returned above*/
+    movnq x7, x0
+
+ /* Get back the stack pointer and return address */
     ldp x29, x30, [sp], #16
-    ret /* return to point in x30 */
 
+ /* if the conditional was not truthy, recur */
+    cbnz x2, cond
+
+ /* evaluation of the returned value goes here. It'll return in x0*/
+
+ /* return to point in x30 */
+    ret
 #+end_src
 
 * Footnotes
