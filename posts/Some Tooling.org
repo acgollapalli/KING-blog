@@ -6,6 +6,7 @@ title: Some Tooling
 #+END_EXPORT
 #+TITLE: Some Tooling
 #+OPTIONS: toc:nil
+<<<<<<< HEAD
 #+EXPORT_FILE_NAME: ../_posts/2022-04-17-some-tooling.md
 
 I've been working primarily on a couple posts for memory management. Keep an eye out for those. The trouble is that, in order to actually so much as cons a pair, you basically need to have memory all figured out. You need to:
@@ -30,3 +31,183 @@ We're going to build some tooling. And we're going to do it in emacs lisp.
 #+begin_src
 
 #+end_src
+=======
+#+EXPORT_FILE_NAME: ../_posts/2022-04-16-some-tooling.md
+
+* Introduction: Wishful Thinking
+
+Okay, so I've been working on posts on memory management, because to do almost anything lispy you need to be able to do some memory management. Lisp is a dynamic language after all. You can check[[https://github.com/acgollapalli/KING-blog/tree/gh-pages/posts][ the repo for this blog]] to see the progress on those, but in the meanwhile, I'm taking Gerald Sussman's advice to "use wishful thinking". How? By pretending I've got an assembly lisp.
+
+For instance:
+#+Begin_src lisP
+(defλ some-fn
+  [x0 x1 x2 x3 & x4]
+  (some-stuff x1 x3)
+  (compute-return-value x0 x4))
+#+end_src
+
+#+RESULTS:
+: [x0 x1 x2 x3 & x4]
+
+Becomes something like:
+#+begin_src asm
+    .text
+    .global some-fn
+some-fn:
+    /* store frame pointer and return address on stack */
+    stp x29, x30 [sp, #-32]!
+    /* store stack pointer as new frame pointer */
+    mov x29, [sp]
+
+    /* store all the arguments on the stack*/
+    /* (we're assuming all arguments are coming to us evaluated) */
+    stp x0, x1 [sp, #-32]!
+    stp x2, x3 [sp, #-32]!
+    str x4 [sp, #-16]
+
+    /* getting the arguments for some-stuff and calling it */
+    ldr x0, [sp], #64         // get x1 (second arg)
+    ldr x1, [sp], #32         // get x3 (fourth arg)
+    bl some-stuff             // call some-stuff
+
+    /* getting the arguments for compute-return-value and calling it */
+    ldr x0, [sp], #80         // get x0 (first arg)
+    ldr x1, [sp], #16         // get x4 (& args)
+    bl compute-return-value   // call compute-return-value
+
+    /* pointer to return value is in x0 */
+
+    ldp x29, x30, [sp], #112 /* get back frame pointer and return address */
+    ret /* return to point in x30 */
+#+end_src
+
+[[https://diveintosystems.org/book/C9-ARM64/functions.html][This resource]] was very helpful in understanding how one might handle procedure calls.
+
+We don't have a heap. So our pointers don't actually point to anything yet. But We actually have something that looks like a procedure call now.
+
+* A Compiler of Sorts in Emacs-Lisp
+
+Let's try to write some emacs-lisp to turn our pseudo-lisp into assembly. Why Emacs-lisp? Because it was the example of a lisp given in the introduction, and because it is quite possibly the most widely available and distributed, longest supported lisp out there.
+
+** Reading in our Pseudo-Lisp
+
+Let's read in our pseudo-lisp. Our initial solution is gleefully stolen from [[https://emacs.stackexchange.com/questions/33586/how-to-read-elisp-file-into-s-expression][Stack Overflow]]. (We're not avoiding any programmer stereotypes today!)
+
+#+begin_src emacs-lisp
+(with-current-buffer (find-file-noselect
+                      (concat blog-directory
+                              "posts/Some Tooling.org"))
+
+    (let ((here (point)))
+      (goto-char 686)
+      (read (current-buffer)))
+#+end_src
+
+The actual snippet of our pseudo-lisp starts at char 686 in this file. It's a horrendously ugly way of doing things, so let's hide it:
+
+#+begin_src emacs-lisp
+(defun do-stuff (im-stuff)
+   (with-current-buffer (find-file-noselect
+                      (concat blog-directory
+                              "posts/Some Tooling.org"))
+    (let ((here (point)))
+       (goto-char 686)
+       (let ((result (funcall im-stuff (read (current-buffer)))))
+         (goto-char here)
+         result))))
+#+end_src
+
+#+RESULTS:
+: do-stuff
+
+The above snippet returns a parsed version of our pseudo-lisp as s-expressions. That means that we can treat our pseudo-lisp like any other s-expressions, which emacs-lisp, like all lisps, happens to be exceptionally good at parsing.
+
+For instance, let's say we want the very first value of our pseudo-lisp.
+
+#+begin_src emacs-lisp
+(do-stuff `car) ;=> defλ
+#+end_src
+
+How about the argument list?
+
+#+begin_src emacs-lisp
+(do-stuff `caddr) ;=> [x0 x1 x2 x3 & x4]
+#+end_src
+
+And the second argument?
+
+#+begin_src emacs-lisp
+(do-stuff
+ (lambda (x)
+   (aref (caddr x) 1))) ;=> x1
+#+end_src
+
+#+RESULTS:
+: x1
+
+For this example, the second argument is just the name of the register that the argument is representing. But we can use this to create a mapping of our aliases within a form.
+
+* Programmatically Creating Some Assembly:
+
+We'll start small, interchanging pieces as we go:
+
+#+begin_src emacs-lisp
+(defun eval-pseud (expression)
+   (case (car expression)
+     ('defλ (let ((arguments (caddr expression))
+                  (body (cdddr expression)))
+              body))))
+#+end_src
+
+#+RESULTS:
+: eval-pseud
+
+All this does is return the body:
+
+#+begin_src emacs-lisp
+(do-stuff 'eval-pseud) ;;=> ((some-stuff x1 x3)
+                       ;;    (compute-return-value x0 x4))
+#+end_src
+
+Let's add an association list (alist) to hold the arguments and their associated registers:
+
+#+begin_src emacs-lisp
+(defun arg-alist (args)
+  (let ((i 0)
+        (a '()))
+    (while (< i (length args))
+      (when (not (eq (aref args i) '&))
+        (setq a
+              (cons (cons (aref args i)
+                          (length a))
+                    a)))
+      (setq i (+ i 1)))
+    a))
+#+end_src
+
+#+RESULTS:
+: arg-alist
+
+And we can now add that back in to our eval-pseud function
+
+#+begin_src emacs-lisp
+(defun eval-pseud (expression)
+   (case (car expression)
+     ('defλ (let ((args (arg-alist (caddr expression)))
+                  (body (cdddr expression)))
+              (list args body)))))
+#+end_src
+
+#+RESULTS:
+: eval-pseud
+
+#+begin_src emacs-lisp
+(do-stuff 'eval-pseud)
+#+end_src
+
+#+RESULTS:
+| (x4 . 4)           | (x3 . 3)                     | (x2 . 2) | (x1 . 1) | (x0 . 0) |
+| (some-stuff x1 x3) | (compute-return-value x0 x4) |          |          |          |
+
+We'll use the alist =args= to tell us where on the stack the variable is stored.
+>>>>>>> origin/gh-pages

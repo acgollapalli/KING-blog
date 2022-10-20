@@ -1,0 +1,117 @@
+#+BEGIN_EXPORT html
+---
+layout: post
+title: Memory Mapping
+---
+#+END_EXPORT
+#+TITLE: Memory Mapping
+#+OPTIONS: toc:nil
+#+EXPORT_FILE_NAME: ../_posts/2022-03-29-memory-mapping.md
+
+* Intro: Cons(tructors) and Pointers
+In any lisp, the core method of constructing data, the core primitive of all data structures, is the cons pair. See [[https://sarabander.github.io/sicp/html/Chapter-2.xhtml#Chapter-2][SICP Ch. 2]].
+
+Typically, a cons pair can depicted in a box and pointer diagram like this:
+
+#+NAME: Fig. 2.2 from SICP, unofficial ebook
+[[https://raw.githubusercontent.com/sarabander/sicp/master/html/fig/chap2/Fig2.2e.std.svg]]
+
+(Thanks to Andres Raba for his version of SICP and for these figures!). Now, if we look at that, it becomes pretty clear what exactly that diagram actually represents:
+
++ A piece of data (the first part of the pair)
++ Another piece of data (the second part of the pair)
++ The pointers to two pieces of data, which constitute the actual constructed object of a cons pair
+
+All a cons pair really is just two pointers. So in memory we just have to put three things:
+0) A tag or something to tell us "This is a cons pair"
+1) The pointer to the first object
+2) The pointer to the second object
+
+Now it's kind of a magical thing that you can use these pairs to generate lists, and trees, and numerical representations, and all sorts of crazy things! For instance, here's how you represent lists:
+
+[[https://raw.githubusercontent.com/sarabander/sicp/master/html/fig/chap2/Fig2.4e.std.svg]]
+
+It's just:
+
+#+begin_src scheme
+(cons 1 (cons 2 (cons 3 (cons 4 nil))))
+#+end_src
+
+And that becomes:
+#+begin_src scheme
+'(1 2 3 4)
+#+end_src
+
+Amazing, right!?
+
+So, it seems pretty simple to just call =malloc= and get the requisite amount of memory to create a cons pair object right? And then we can start cons'ing away!
+
+... Oh. See the problem yet?
+
+* The Problem: How do we get memory?
+So a cons pair requires memory assigned. And each piece of data needs to be stored in memory as well. If we evaluate say =(cons 12 "15")=, then we need to:
+
+1) Store the number 12 in memory
+2) Store the string "15" in memory
+3) Store the pointers to the number 12 and string "15" in memory.
+
+Now, we can't just put 12 anywhere. Let's say we put it at 0x09000000. What happens? Did we actually store the number? No, we sent the form feed character (ascii code 12) across our UART connection (at least for the QEMU =virt= machine). Why? Because a lot of devices on computers are mapped to specific locations in memory. Well, which regions do we need to avoid? The answer to that lies in the device tree blob.
+** The Device Tree Blob (DTB)
+What is the Device Tree Blob? It's a special structure of data which tells us a whole bunch of things about the different devices our programs can interact with, including which areas of memory are _reserved_ by specific devices. Typically, the only things that would interact with it are really low level things like your OS and your bootloader. Higher level constructs will just interact directly with the OS itself to get devidce interactivity. But at the low-level, doing bare-metal programming like we are, we need to read the device tree blob.
+
+The [[https://www.devicetree.org/specifications/][devicetree specification]]. We're on v0.4-rc1.
+
+In Ch. 5 of the linked specification it describes the actual data structure of the DTB. The important bits for us are the header and the memory reservation block.
+
+*** The Header
+The header looks like this (from section 5.2 of the devicetree spec):
+
+#+BEGIN_SRC c
+struct fdt_header {
+uint32_t magic;                // magic number: 0xd00dfeed
+uint32_t totalsize;            // total size of the DTB
+uint32_t off_dt_struct;
+uint32_t off_dt_strings;
+uint32_t off_mem_rsvmap;       // offset to memory reservation block
+uint32_t version;
+uint32_t last_comp_version;
+uint32_t boot_cpuid_phys;
+uint32_t size_dt_strings;
+uint32_t size_dt_struct;
+};
+#+END_SRC
+
+So there are 3 things that we really care about here. The first thing is that the magic number is =0xd00dfeed=, which is hilarious. The second is the total size of the DTB. We can use this, along with the address of the DTB in order to figure out where the start of our unallocated RAM is. The third thing we care about is the offset of the memory reservation block from the start of the header. That way we can make note of and avoid accidentally trying to store things in reserved areas of memory.
+
++ Our =totalsize= is a 32 bit number, offset 32 bits from the DTB start (=dtb_start=)
++ Our =off_mem_rsvmap= is a 32 bit number, offset 128 bits from the =dtb_start=, or 96 bits from =totalsize=.
+
+According to the [[https://qemu-project.gitlab.io/qemu/system/arm/virt.html][QEMU virt docs]], we should be getting the memory address for the DTB =dtb_start= in register x0 when our program first runs.
+
+*** The Memory Reservation Block
+From the specification:
+
+#+begin_quote
+The memory reservation block consists of a list of pairs of 64-bit big-endian integers, each pair being represented by the following C structure.
+
+#+begin_src c
+struct fdt_reserve_entry {
+    uint64_t address;
+    uint64_t size;
+};
+#+end_src
+
+Each pair gives the physical address and size in bytes of a reserved memory region. These given regions shall not overlap each other. The list of reserved blocks shall be terminated with an entry where both address and size are equal to 0. Note that the address and size values are always 64-bit.
+#+end_quote
+
+So starting at =dtb_start + off_mem_rvsmap=, we have a list of reserved memory areas, each of which has a 64-bit =address= and a 64-bit =size=, which terminates with a nil-entry pair of an =address= with value 0 and a =size= of 0.
+
+So, we now have all the elements to read the DTB and figure out which areas of memory are safe to use.
+
+*** Available Memory (memory devices and addresses)
+The Device Tree Blob actually gives us this as well. We're going to ignore it for now, in favor of just hard coding the QEMU constants.
+
+** Reading the DTB
+So, let's try and write some assembly to actually figure out which bits of memory are useable.
+*** Detour: Printing Numbers
+We need to be able to print numbers.

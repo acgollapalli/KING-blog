@@ -1,0 +1,38 @@
+#+BEGIN_EXPORT html
+---
+layout: post
+title: lambda
+---
+#+END_EXPORT
+#+TITLE: λ, fn, funcall, procedure calls, etc.
+#+OPTIONS: toc:nil
+#+EXPORT_FILE_NAME: ../_posts/2022-04-05-lambda.md
+
+* Some preliminaries
+/u/anydalch on Reddit gave a helpful response to [[../2022/03/08/something-boots/][our previous post]] addressing, well, addressing in AAarch64. I've quoted it there.
+
+* Some Conceptual Work
+A lambda requires three things
+1) parameters
+2) A list of things to do
+3) A return value
+** The parameters
+In assembly, we have registers. These registers store values, either a 32-bit value or a 64-bit value. And we compute by using instructions to take values from these registers, combine or modify them, and then store new values in those registers. We'll use registers to store parameters directly, at least in our early "low-level lisp" phase.
+
+In AAarch64 assembly, we have 31 general-purpose registers. These registers have the ability to be used as a 64-bit register, or as a 32-bit register (in which the top 32 bits of the register are ignored). When used as a 64-bit register, the mnemonic for that register is X/n/, in which is the register numbered 0-30. When used as a 32-bit register, the register is referred to as W/n/, with n referring to the same register.
+
+However, instructions modify these registers, and there's [[https://developer.arm.com/documentation/den0024/a/The-ABI-for-ARM-64-bit-Architecture/Register-use-in-the-AArch64-Procedure-Call-Standard/Parameters-in-general-purpose-registers][established ways to work with them in procedure calls.]] For instance, x30 may be general-purpose register, but the =BL= instruction modifies it, because x30 also serves as the link register. So really, what we're allowed to use, (according to the Programmer's Guide at least) is x0-x7.
+
+** A List of Things to Do
+Essentially, a compiled function is just a series of machine instructions stored in memory. We store our parameters in registers x0-7, branch to the instructions we want to execute with a link (instruction =BL=) and then branch back to the address in the Link Register (x30) when we're done.
+
+We actually already did this in [[../2022/03/08/something-boots/][our last post]], using the branch instruction (=B=) to branch over to the subroutine =listen=. We sort of used x0 as a way to place parameters, but only within the same subroutine. And the thing that we didn't touch on at all was:
+
+** A Return Value
+The Programmer's Guide linked above states that x8 should be used to pass a pointer to the result, and if the result is saved in registers, then it should be in registers x0-x7. So we need to make sure that a procedure places the result value in x0, or if it's a pointer in x8. (Maybe we can zero out x0 and set x1 to 1 if the return value is in x8 instead of x0)
+
+
+
+
+* Resources
++ [[https://developer.arm.com/documentation/den0024/a][The ARM Cortex-A Series Programmer's Guide for ARMv8-A]]
