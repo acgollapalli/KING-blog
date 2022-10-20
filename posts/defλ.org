@@ -1,0 +1,331 @@
+#+BEGIN_EXPORT html
+---
+layout: post
+title: defλ
+---
+#+END_EXPORT
+#+TITLE: defλ
+#+OPTIONS: toc:nil
+#+EXPORT_FILE_NAME: ../_posts/2022-10-19-defλ.md
+
+* Introduction
+Let's define some primitives for a preliminary lisp (and associate some symbols while we're at it).
+We need:
+ + cons (ζ)
+ + car (α)
+ + cdr (ω) (or should this be β??)
+ + nil (∅) and true (⊤)
+ + eq (=)
+ + cond (χ)
+ + quote (')
+
+We can use those to define:
+ + eval (Ξ)
+ + lambda (λ)
+ + map (↦)
+ + apply (Λ)
+
+In order to get there, we're going to have to define some preliminaries:
+** Preliminaries: Types and Tags
+We're going to use [[https://drmeister.wordpress.com/2015/05/16/tagged-pointers-and-immediate-fixnums-characters-and-single-floats-in-clasp/][tagged pointers]] in order to know what kind of thing (or /type/) our pointer is pointing to, right now we're only going to define a few:
+
++--------------+-----------+
+|Pointer Type  |Pointer tag|
++--------------+-----------+
+|true          |#b000      |
++--------------+-----------+
+|procedure     |#b001      |
++--------------+-----------+
+|cons cell     |#b011      |
++--------------+-----------+
+|boolean       |#b010      |
++--------------+-----------+
+
+Now why do we have to have a procedure tag in our pointers? Because we're leaving the door open for an (optional) complication to lisp evaluation. Here's an example:
+
+This is what happens in most lisps when you do this:
+#+begin_src lisp
+(eval '(1 (+ 1 1) (+ 1 2))) => ERROR: SOMETHING SOMETHING '1' is not a function
+#+end_src
+
+And here is what I personally think SHOULD happen:
+#+begin_src lisp
+(eval '(1 (+ 1 1) (+ 1 2))) => '(1 2 3)
+#+end_src
+
+Now, a pointer to a general object, or to something that you treat as a literal, or can't otherwise evaluate, will contain a 0 as the first significant bit (bit 0). As such, the proposed evaluation model would know not to attempt to apply it to a set of arguments. This is subject to change, and may not work, or may be useless. But we'll stick with it for now.
+** Preliminaries: Functional Arguments and Procedure Calls
+Let's look at an actual example of the kind of thing we'd like to write:
+#+Begin_src lisP
+(defλ some-fn
+  [x0 x1 x2 x3 & x4]
+  (some-stuff x1 x3)
+  (compute-return-value x0 x4))
+#+end_src
+
+#+RESULTS:
+: [x0 x1 x2 x3 & x4]
+
+Becomes something like:
+#+begin_src asm
+    .text
+    .global some-fn
+some-fn:
+    /* store frame pointer and return address on stack */
+    stp x29, x30 [sp, #-32]!
+    /* store stack pointer as new frame pointer */
+    mov x29, [sp]
+
+    /* <evaluation of arguments goes here> */
+
+    /* store all the arguments on the stack*/
+    stp x0, x1 [sp, #-32]!
+    stp x2, x3 [sp, #-32]!
+    str x4 [sp, #-16]
+
+    /* getting the arguments for some-stuff and calling it */
+    ldr x0, [sp], #64         // get x1 (second arg)
+    ldr x1, [sp], #32         // get x3 (fourth arg)
+    bl some-stuff             // call some-stuff
+
+    /* getting the arguments for compute-return-value and calling it */
+    ldr x0, [sp], #80         // get x0 (first arg)
+    ldr x1, [sp], #16         // get x4 (& args)
+    bl compute-return-value   // call compute-return-value
+
+    /* pointer to return value is placed in x0 by compute-return-value */
+
+    ldp x29, x30, [sp], #112 /* get back frame pointer and return address */
+    ret /* return to point in x30 */
+#+end_src
+
+[[https://diveintosystems.org/book/C9-ARM64/functions.html][This resource]] was very helpful in understanding how one might handle procedure calls.
+
+* cons (ζ)
+Let's start simple, the absolute simplest we can get: A cons pair.
+
+** What's a Cons Pair?
+In any lisp, the core method of constructing data, the core primitive of all data structures, is the cons pair. See [[https://sarabander.github.io/sicp/html/Chapter-2.xhtml#Chapter-2][SICP Ch. 2]].
+
+#+begin_src lisp
+(cons 'a 'b) ;;=> ('a . 'b)
+#+end_src
+
+It's typically denoted with a period in between the two objects like so =(<object-a> . <object-b>)=
+
+Typically, a cons pair can depicted in a box and pointer diagram like this[fn:1]:
+
+#+NAME: Fig. 2.2 from SICP, unofficial ebook
+[[https://raw.githubusercontent.com/sarabander/sicp/master/html/fig/chap2/Fig2.2e.std.svg]]
+
++ A piece of data (the first part of the pair)
++ Another piece of data (the second part of the pair)
++ The pointers to two pieces of data, which constitute the actual constructed object of a cons pair
+
+All a cons pair really is just two pointers. So in memory we just have to put two things:
+0) The pointer to the first object.
+1) The pointer to the second object
+
+Now it's kind of a magical thing that you can use these pairs to generate lists, and trees, and numerical representations, and all sorts of crazy things! For instance, here's how you represent lists:
+
+[[https://raw.githubusercontent.com/sarabander/sicp/master/html/fig/chap2/Fig2.4e.std.svg]]
+
+It's just:
+
+#+begin_src scheme
+(cons 1 (cons 2 (cons 3 (cons 4 nil))))
+#+end_src
+
+And that becomes:
+#+begin_src scheme
+'(1 2 3 4)
+#+end_src
+
+Amazing, right!?
+
+So how do we actually translate that out to the machine?
+
+** What is a Cons Pair to Your Computer? And what is cons?
+A cons pair is a pair of pointers. That's it. It takes 128 bits of memory, and we allocate it on the stack[fn:2]. The procedure =cons= just returns the tagged pointer to this 128 bit span of memory. The tagged pointer itself is just the address of the pointers on the stack, with the last couple of bits flipped to the tag of a cons pair. Adding 3 to the memory address has the same effect.
+
+So this:
+
+#+begin_src lisp
+(cons 'a 'b) ;;=> ('a . 'b)
+#+end_src
+
+#+begin_src asm
+    .text
+    .global cons
+cons:
+ /* store frame pointer and return address on stack */
+    stp x29, x30 [sp, #-16]!
+ /* store stack pointer as new frame pointer */
+    mov x29, [sp]
+
+ /* store the arguments on the stack*/
+    stp x0, x1 [sp, #-16]!
+
+ /* <evaluation of arguments goes here>
+  We'll put the pointers to evaluated arguments
+  in the same registers (x0, x1) as they came to us */
+
+ /* Getting the tagged pointer to our cons pair:
+    We add 32 to the stack pointerto get the address
+    of our cons pair and add 3 to flip the last two
+    bits to #b011. Hence, we add 35.*/
+    add x0, [sp], #35
+
+ /* get back frame pointer and return address */
+    ldp x29, x30, [sp], #32
+    ret /* return to point in x30 */
+#+end_src
+
+* car (α)
+The car is the first object in your cons-pair. Like so:
+#+begin_src lisp
+(car ('a . 'b)) ;;=> 'a
+#+end_src
+
+The procedure for =car= should return the pointer stored in the first 64 bits of the cons-pair's memory address. Remember, this address is just the value of the tagged pointer, minus the tag itself.
+#+begin_src asm
+    .text
+    .global car
+car:
+ /* store frame pointer and return address on stack */
+    stp x29, x30 [sp, #-16]!
+ /* store stack pointer as new frame pointer */
+    mov x29, [sp]
+
+  /* <evaluation of arguments goes here>
+    We'll put the pointers to evaluated arguments
+    in the same register x0 as they came to us.
+    This is also where we would check the tag of
+    the pointer given to us in x0, to make sure it
+    points to a cons pair.*/
+
+ /* First we subtract the tagged pointer of cons pair
+    in order to get the memory address of the cons-pair.
+    Then we load the value stored at that address into x0. */
+    sub x0, x0, #3
+    ldr x0, x0
+
+ /* get back frame pointer and return address */
+    ldp x29, x30, [sp], #16
+    ret /* return to point in x30 */
+#+end_src
+
+Now if you read that, beyond all the boilderplate, it's just =sub x0, x0, #3= which removes the tag telling us the address is to a cons-pair, and =ldr x0, x0= which loads the return value into =x0=. We don't even bother storing the argument to =car= on the stack. =cdr= is similar:
+* cdr (ω)
+The cdr of a cons-pair is the second object stored in a cons-pair. Hence, =cdr= returns the second pointer stored in the 128 bits of a cons-pair in memory.
+So this:
+#+begin_src lisp
+(cdr ('a . 'b)) ;;=> 'b
+#+end_src
+Becomes this:
+#+begin_src asm
+    .text
+    .global cdr
+cdr:
+ /* store frame pointer and return address on stack */
+    stp x29, x30 [sp, #-16]!
+ /* store stack pointer as new frame pointer */
+    mov x29, [sp]
+
+  /* <evaluation of arguments goes here>
+    We'll put the pointers to evaluated arguments
+    in the same register x0 as they came to us.
+    This is also where we would check the tag of
+    the pointer given to us in x0, to make sure it
+    points to a cons pair.*/
+
+ /* We'd subtract 3 from the tagged pointer to get the
+    memory address of the cons-pair, then we'd add 8 to get
+    the address of the second value. So we add 5.*/
+    add x0, x0, #5
+    ldr x0, x0
+
+ /* get back frame pointer and return address */
+    ldp x29, x30, [sp], #16
+    ret /* return to point in x30 */
+#+end_src
+As I said, similar.
+
+* nil (∅) and true (⊤)
+In accord with the boolean pointer tagging we defined earlier:
++ =true (⊤)= is defined as =#b1010=
++ =nil (∅)= is defined as =#b0010=
+* eq (=)
+Equality in lisp is a problem full of pitfalls, and we are in too early a stage to actually approach it. As such, for our purposes, equality consists of no more than a comparison of two pointers. Remember, this is a preliminary lisp, an assembly lisp if you will. We're just trying to get to a better low-level language than assembly.
+
+Taking only the case of two arguments, we can use something along these lines:
+#+begin_src asm
+    .text
+    .global eq
+eq:
+ /* store frame pointer and return address on stack */
+    stp x29, x30 [sp, #-16]!
+ /* store stack pointer as new frame pointer */
+    mov x29, [sp]
+ /* store the arguments on the stack*/
+    stp x0, x1 [sp, #-16]!
+
+  /* <evaluation of arguments goes here>
+    We'll put the pointers to evaluated arguments
+    in the same register x0 as they came to us.
+    This is also where we would check the tag of
+    the pointer given to us in x0, to make sure it
+    points to a cons pair.*/
+
+    cmp x0, x1 /* this sets a condition flag */
+    moveq x0, #10 /* conditional set x0 to #b1010 if equal */
+    movnq x0 #2 /* conditional set x0 to #b0010 if not equal */
+
+ /* get back frame pointer and return address */
+    ldp x29, x30, [sp], #16
+    ret /* return to point in x30 */
+
+#+end_src
+
+* cond (χ)
+Cond is a procedure that takes a list of those functions that takes an unlimited number of unevaluated pairs of forms (just groups of two, not cons pairs), comprising of a conditional and a result. In our little, clojure-like dialect of lisp, it looks something like this:
+#+begin_src lisp
+(cond
+ (condition1 args) (result1 args)
+ (condition2 args) (result2 args)
+ :else (default-result))
+#+end_src
+Now, we haven't had a procedure that takes potentially more arguements than there are registers before, so we need to define how we're going to handle that.
+#+begin_src asm
+    .text
+    .global eq
+eq:
+    stp x29, x30 [sp, #-16]!
+ /* store stack pointer as new frame pointer */
+    mov x29, [sp]
+ /* store the arguments on the stack*/
+    stp x0, x1 [sp, #-16]!
+
+  /* <evaluation of arguments goes here>
+    We'll put the pointers to evaluated arguments
+    in the same register x0 as they came to us.
+    This is also where we would check the tag of
+    the pointer given to us in x0, to make sure it
+    points to a cons pair.*/
+
+    cmp x0, x1 /* this sets a condition flag */
+    moveq x0, #10 /* conditional set x0 to #b1010 if equal */
+    movnq x0 #2 /* conditional set x0 to #b0010 if not equal */
+
+ /* get back frame pointer and return address */
+    ldp x29, x30, [sp], #16
+    ret /* return to point in x30 */
+
+#+end_src
+
+* Footnotes
+[fn:1]
+(Thanks to Andres Raba for his version of SICP and for these figures!). Now, if we look at that, it becomes pretty clear what exactly that diagram actually represents:
+
+[fn:2]
+We're not going to worry about memory allocation right now, or heaps and stacks, (although Henry Baker has some [[https://dl.acm.org/doi/pdf/10.1145/130854.130858][interesting]] [[https://dl.acm.org/doi/pdf/10.1145/214448.214454][things]] to say on the matter). Why? Because it's a big topic that I'm not ready to approach. I do have some ideas, and it has ramifications to what we're going to do in this post, but suffice to say: where we're going, we don't need heaps!

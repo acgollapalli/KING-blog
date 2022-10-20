@@ -1,0 +1,9 @@
+#+BEGIN_EXPORT html
+---
+layout: post
+title: Mal-location
+---
+#+END_EXPORT
+#+TITLE: Mal-location
+#+OPTIONS: toc:nil
+#+EXPORT_FILE_NAME: ../_posts/2022-10-19-mal-location.md
