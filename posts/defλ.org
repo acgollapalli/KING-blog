@@ -264,6 +264,8 @@ Cond is a procedure that takes a list of those functions that takes an unlimited
 #+end_src
 Now, we haven't had a procedure that takes potentially more arguments than there are registers before, so we need to decide how we're going to handle that. We'll define it properly when we define =apply (Λ)=. But for now we'll state it like this:
 + For procedures which take an unlimited number of arguments, it must receive a list of arguments in register x7.
+
+Let's try to implement it:
 #+begin_src asm
     .text
     .global cond
