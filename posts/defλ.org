@@ -32,7 +32,7 @@ We're going to use [[https://drmeister.wordpress.com/2015/05/16/tagged-pointers-
 +--------------+-----------+
 |Pointer Type  |Pointer tag|
 +--------------+-----------+
-|true          |#b000      |
+|general data  |#b000      |
 +--------------+-----------+
 |procedure     |#b001      |
 +--------------+-----------+
@@ -289,9 +289,7 @@ cond:
     str x0, x7    /* put the pointer to our list in x0
                      so car knows the location of our argument
                      list.*/
-    movnq [LR], [PC, #8] /* set the link register so car
-                             knows where to return.*/
-    cbnz x2, car  /* call car. the pointer to our first
+    blnz x2, car  /* call car. the pointer to our first
                      conditional will come back in x0 */
 
  /* evaluation of the conditional in x0 goes here */
@@ -307,17 +305,15 @@ cond:
  /* We need the cdr for the arglist regardless of whether our
     conditional was truthy, so let's get that */
     movnq x0, x7  /* store the pointer to our list in x0 */
-    br x2, cdr    /* get the cdr to our argument list, returns in x0*/
+    bl x2, cdr    /* get the cdr to our argument list, returns in x0*/
 
  /* If conditional was truthy get the resultant form, which is the second
     item in our argument list. Returns in x0. */
-    movnq [LR], [PC, #8]
-    cbnz x2, car
+    blnz x2, car
 
  /* If the conditional was not truthy, get the arglist minus the
     initial conditional and result form */
-    movnq [LR], [PC, #8]
-    cbz x2, cdr
+    blz x2, cdr
 
  /* If the conditional was not truthy, set the register for the
     arglist to the new arglist returned above*/
@@ -327,7 +323,7 @@ cond:
     ldp x29, x30, [sp], #16
 
  /* if the conditional was not truthy, recur */
-    cbnz x2, cond
+    bnz x2, cond
 
  /* evaluation of the return value goes here. It'll return in x0*/
 

@@ -1,0 +1,134 @@
+#+BEGIN_EXPORT html
+---
+layout: post
+title: defλ Part 2
+---
+#+END_EXPORT
+#+TITLE: defλ Part 2
+#+OPTIONS: toc:nil
+#+EXPORT_FILE_NAME: ../_posts/2022-10-20-defλ-part-2.md
+
+* Introduction
+Last time we defined some primitives for a preliminary lisp (and associate some symbols while we're at it).
+We have:
+ + cons (ζ)
+ + car (α)
+ + cdr (ω) (or should this be β??)
+ + nil (∅) and true (⊤)
+ + eq (=)
+ + cond (χ)
+
+We still need:
+ + quote (') and unquote (~)
+ + apply (Λ)
+ + eval (Ξ)
+ + lambda (λ)
+ + map (↦)
+
+So without further ado... oh wait, we need some more types first.
+** Preliminaries: Types and Tags
+Last time we defined a few endings for tagged pointers using the least significant bits: general data, procedure, cons cell, and boolean.
+
+Unfortunately, if we wish to have any hope of actually doing any lisp evaluation, we need a couple more:
++ integers
++ characters
++ strings
++ symbols
++ keywords
+
+Or to put things more succinctly (and leave us more options down the line):
++ Numerical data
++ Lexical data
+
++----------------+-----------+
+|Pointer Type    |Pointer tag|
++----------------+-----------+
+|general data    |#bxxx000   |
++----------------+-----------+
+|procedure       |#bxxx001   |
++----------------+-----------+
+|cons cell       |#bxxx011   |
++----------------+-----------+
+|boolean         |#bxxx010   |
++----------------+-----------+
+|numerical data  |#bxxx100   |
++----------------+-----------+
+|lexical data    |#bxxx110   |
++----------------+-----------+
+
+Let's add a couple conditions:
++ If the first least significant bit is 0, then the pointer refers to a value. That means that it should evaluate to itself.
++ If the fourth least significant bit of a numerical or lexical type is 1, that means that the value is directly encoded in the pointer itself. This also means the 5th and 6th least significant bits are to be used for the value in the pointer instead of for any further information regarding the type of the data included.
+
+You'll notice that the size of our tags has gone up to six bits. In ARM64 assembly, pointers are 64 bits, and all the numbers our system is going to use are 64 bits or larger. That means that every memory address is going to be some multiple of 64. Consequently, every address referring to numerical data (or for that matter, to any of our data types) is going to refer to an address that ends in #b000000. As such, we can freely use the 6 least insignificant bits as a pointer tag.
+
+** Numerical Data
+Let's define a few numerical types, although the only ones we're actually going to use right now is integers:
++---------------+-----------+
+|Pointer Type   |Pointer tag|
++---------------+-----------+
+|small int      |#b1100     |
++---------------+-----------+
+|big int        |#b010100   |
++---------------+-----------+
+|floating point |#b110100   |
++---------------+-----------+
+
+The small int only allows for signed values. Actually all the data types do right now. Perhaps someone better informed can inform me of the value of unsigned numbers, but as of right now, I do not know it, so I'm not going to worry about them. That said: if we need them, we can stipulate that the 5th least significant bit implies that the pointer refers to a signed number.
+
+We're going to ignore big ints and floating points for now.
+
+** Lexical Data
+For lexical data, we really only need characters and strings. For simplicity's sake, we're going to have all characters be UTF-32 unicode characters, and we'll just encode these in the pointer itself.
+
++---------------+-----------+
+|Pointer Type   |Pointer tag|
++---------------+-----------+
+|utf-32 char    |#b1110     |
++---------------+-----------+
+|string         |#b000110   |
++---------------+-----------+
+|keyword        |#b010110   |
++---------------+-----------+
+
+
+Strings are like arrays of characters. We could encode them on a single continuous area of memory, just like we do a cons pair. However, if want to manipulate them, say, increase their length, then that's a pain, because we don't really have memory allocation or garbage collection yet. So instead we're going to treat them like lists (for now!). At a fundamental level, a pointer to a string points to a cons pair. I promise, we'll have all sorts of sweet immutable data structures.
+
+Keywords are just strings with different pointer tags.
+
+As for quoted symbols we'll get to those in a moment.
+** Procedural and Symbolic Data
+ Symbols are just strings cons'd to pointers. Again, this is just temporary for right now. I'm trying to keep things simple. We'll do this right soon enough.
+
+ Quoted symbols are just symbols with a different pointer tag.
++-----------------+-----------+
+|Pointer Type     |Pointer tag|
++-----------------+-----------+
+|procedure        |#b000001   |
++-----------------+-----------+
+|quoted procedure |#b000001   |
++-----------------+-----------+
+|symbol           |#b001001   |
++-----------------+-----------+
+|quoted symbol    |#b011001   |
++-----------------+-----------+
+** Cons Pairs (again)
+Now, let's reapproach the cons-pair, since we have a 6 bit memory tag now, and since we have to deal with quoting. Now, as any lisp hacker knows, you can quote a lisp and send it to eval, and have it return exactly that list. And since we defined a type for quoted symbol, we may as well also define a type for quoted cons-pairs. This has some nice consequences (no pun intended).
++-----------------+-----------+
+|Pointer Type     |Pointer tag|
++-----------------+-----------+
+|cons pair        |#b000011   |
++-----------------+-----------+
+|quoted cons pair |#b001011   |
++-----------------+-----------+
+Okay, on to the meat of the article.
+* quote (') and unquote (~)
+Because the only things you can quote (or should quote) are things that evaluate to something other than themselves. So far we have followed the convention that all things that do not evaluate to themselves have a least significant bit of 1. We'll now state this properly:
++ All quoteable data types have a least significant bit of 1 in their data type.
++ If an item is quotable, then the fourth least significant bit of its pointer is dedicated to declaring the items status as quoted or not quoted.
+
+  As such =quote (')= simply checks the least significant bit, and if it is 1, sets the fourth least significant bit to 1. Similarly =unquote (~) checks the least significant bit, and sets the fourth least significant bit to 0.
+* apply (Λ)
+Okay, now we get to the fun stuff. If you were paying attention to the last post, you would have noticed something kind of... off. Namely, the evaluation steps were included in the example code for the procedures. Now for =cond=, this makes sense. In most lisps, =cond= is a special form. But here =cond= is not a special form. There are no special forms in this lisp. Instead, evaluation is controlled at the level of the function, and not at the level of =apply=. I think this gives a programmer a lot of flexibility. It blurs the line between function and macros and gets rid of the pesky problem of not having first-class macros in your lisp. Obviously, there are tradeoffs here. But I think this is the right way to go about it. We'll look at the syntax of how this looks from a programmer perspective when we get to =lambda=, but for now we're at =apply=.
+* eval (Ξ)
+Okay, here comes the hard bit. Eval is
