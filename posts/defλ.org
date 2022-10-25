@@ -174,7 +174,7 @@ Boolean values, with values encoded in the pointer as described [[*Displayable V
 
 * cons (ζ)
 Let's start simple, the absolute simplest we can get: A cons pair.
-** What is a Cons Pair to Your Computer? And what is cons?
+
 A cons pair is a pair of pointers. That's it. It takes 128 bits of memory, and we allocate it on the stack[fn:2]. The procedure =cons= just returns the tagged pointer to this 128 bit span of memory. The tagged pointer itself is just the address of the pointers on the stack, with the last couple of bits flipped to the tag of a cons pair. Adding 3 to the memory address has the same effect.
 
 So this:
