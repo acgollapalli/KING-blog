@@ -163,7 +163,15 @@ some-fn:
 ** Caveat Hacker
 I haven't run any of the code in this post. We won't really be able to until we get a REPL going. So, if you're reading this, and see an error, please feel free to mention it in the github repo.
 * nil (∅) and true (⊤)
-Defined above as 0 and 1.
+Boolean values, with values encoded in the pointer as described [[*Displayable Values: Booleans][above]]. Defined as such:
++----------+----------+
+| value    | encoded  |
++----------+----------+
+| nil (∅)  | 0        |
++----------+----------+
+| true (⊤) | 1        |
++----------+----------+
+
 * cons (ζ)
 Let's start simple, the absolute simplest we can get: A cons pair.
 ** What is a Cons Pair to Your Computer? And what is cons?
