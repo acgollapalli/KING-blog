@@ -140,18 +140,18 @@ some-fn:
     /* <evaluation of arguments goes here> */
 
     /* store all the arguments on the stack*/
-    stp x0, x1 [sp, #-32]!
-    stp x2, x3 [sp, #-32]!
+    stp x0, x1 [sp, #-16]!
+    stp x2, x3 [sp, #-16]!
     str x4 [sp, #-16]
 
     /* getting the arguments for some-stuff and calling it */
-    ldr x0, [sp], #64         // get x1 (second arg)
-    ldr x1, [sp], #32         // get x3 (fourth arg)
+    ldr x0, [sp], #42         // get x1 (second arg)
+    ldr x1, [sp], #24         // get x3 (fourth arg)
     bl some-stuff             // call some-stuff
 
     /* getting the arguments for compute-return-value and calling it */
-    ldr x0, [sp], #80         // get x0 (first arg)
-    ldr x1, [sp], #16         // get x4 (& args)
+    ldr x0, [sp], #48         // get x0 (first arg)
+    ldr x1, [sp], #8         // get x4 (& args)
     bl compute-return-value   // call compute-return-value
 
     /* pointer to return value is placed in x0 by compute-return-value */
