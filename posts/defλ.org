@@ -78,7 +78,7 @@ Typically, a cons pair can depicted in a box and pointer diagram like this[fn:1]
 + Another piece of data (the second part of the pair)
 + The pointers to two pieces of data, which constitute the actual constructed object of a cons pair
 
-All a cons pair really is just two pointers. So in memory we just have to put two things:
+All a cons pair really is is just two pointers. So in memory we just have to put two things:
 0) The pointer to the first object.
 1) The pointer to the second object
 
