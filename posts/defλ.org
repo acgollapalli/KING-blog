@@ -54,7 +54,7 @@ We'll define the pointer tag for booleans as follows:
 +----------------+-----------+
 |Pointer Type    |Pointer tag|
 +----------------+-----------+
-|boolean         |#b01010010 |
+|boolean         |#b01010001 |
 +----------------+-----------+
 
 The actual value of the boolean will be encoded in the pointers least significant bit. Keeping with convention, we'll define the values with 1 being true and 0 being false.
@@ -104,7 +104,7 @@ Now, we're going to tag the cons pair as such:
 +----------------+-----------+
 |Pointer Type    |Pointer tag|
 +----------------+-----------+
-|cons cell       |#b11000001 |
+|cons cell       |#b11000000 |
 +----------------+-----------+
 ** Procedural Data
 Now why do we have to have a tag for procedural data in our pointers? Because we're leaving the door open for an (optional) complication to lisp evaluation. Here's an example:
@@ -198,12 +198,12 @@ cons:
     add x0, [sp], #16
 
  /* Add our pointer tag. */
-    mov x1, #b11000001
+    mov x1, #b11000000
     lsl x1, #56
     add x0, x1
 
  /* set x1 to nil */
-    mov x1, #b01010010
+    mov x1, #b01010001
     lsl x1, #56
 
  /* return the pointer to our cons pair */
@@ -233,10 +233,10 @@ car:
 
  /* check the tag */
     lsr x1, x0 #56
-    cmp x1, #b11000001
+    cmp x1, #b11000000
 
  /* set x1 to nil */
-    mov x1, #b01010010
+    mov x1, #b01010001
     lsl x1, #56
 
  /* load our prospective car from memory */
@@ -268,10 +268,10 @@ cdr:
 
  /* check the tag */
     lsr x1, x0 #56
-    cmp x1, #b11000001
+    cmp x1, #b11000000
 
  /* set x1 to nil */
-    mov x1, #b01010010
+    mov x1, #b01010001
     lsl x1, #56
 
  /* load our prospective cdr from memory */
@@ -306,7 +306,7 @@ cond:
 
  /* Check if the argument list in x7 is nil. */
  /* set x6 to nil and compare with x7 */
-    mov x6, #b01010010
+    mov x6, #b01010001
     lsl x6, #56
     cmp x7, x6
 
