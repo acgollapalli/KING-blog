@@ -11,15 +11,13 @@ title: defλ Part 1
 * Introduction
 Let's define some primitives for a preliminary lisp (and associate some symbols while we're at it).
 We need:
+ + nil (∅) and true (⊤)
  + cons (ζ)
  + car (α)
  + cdr (ω) (or should this be β??)
- + nil (∅) and true (⊤)
  + eq (=)
  + cond (χ)
  + quote (')
-
-We can use those to define:
  + eval (Ξ)
  + lambda (λ)
  + map (↦)
@@ -27,21 +25,89 @@ We can use those to define:
 
 In order to get there, we're going to have to define some preliminaries:
 ** Preliminaries: Types and Tags
-We're going to use [[https://drmeister.wordpress.com/2015/05/16/tagged-pointers-and-immediate-fixnums-characters-and-single-floats-in-clasp/][tagged pointers]] in order to know what kind of thing (or /type/) our pointer is pointing to, right now we're only going to define a few:
+We're going to use [[https://drmeister.wordpress.com/2015/05/16/tagged-pointers-and-immediate-fixnums-characters-and-single-floats-in-clasp/][tagged pointers]] in order to know what kind of thing (or /type/) our pointer is pointing to. In AArch64 architectures, bits 56-63 of a virtual address (a pointer) may be used for program specific data, and that is where we will put our tags. Right now we're only going to define a few general categories:
 
-+--------------+-----------+
-|Pointer Type  |Pointer tag|
-+--------------+-----------+
-|general data  |#b000      |
-+--------------+-----------+
-|procedure     |#b001      |
-+--------------+-----------+
-|cons cell     |#b011      |
-+--------------+-----------+
-|boolean       |#b010      |
-+--------------+-----------+
++-------------------+-----------+
+|Pointer Type       |Pointer tag|
++-------------------+-----------+
+|general data       |#b000xxxxx |
++-------------------+-----------+
+|numerical values   |#b001xxxxx |
++-------------------+-----------+
+|displayable values |#b010xxxxx |
++-------------------+-----------+
+|procedural data    |#b100xxxxx |
++-------------------+-----------+
+|symbolic data      |#b101xxxxx |
++-------------------+-----------+
+|structured data    |#b110xxxxx |
++-------------------+-----------+
 
-Now why do we have to have a procedure tag in our pointers? Because we're leaving the door open for an (optional) complication to lisp evaluation. Here's an example:
+We'll really only deal with two of them today: structured data and displayable values.
+
+** Displayable Values: Booleans
+
+What are displayable values? They're values that aren't numbers, evaluate to themselves, and can be displayed. This includes things like characters, strings, keywords, and booleans. It also includes things like images, videos, diagrams, and lots more.
+
+We'll define the pointer tag for booleans as follows:
+
++----------------+-----------+
+|Pointer Type    |Pointer tag|
++----------------+-----------+
+|boolean         |#b01010010 |
++----------------+-----------+
+
+The actual value of the boolean will be encoded in the pointers least significant bit. Keeping with convention, we'll define the values with 1 being true and 0 being false.
+** Structured Data: The Cons Pair
+We're going to start with one data structure today: the cons pair.
+*** What's a Cons Pair?
+In any lisp, the core method of constructing data, the core primitive of all data structures, is the cons pair. See [[https://sarabander.github.io/sicp/html/Chapter-2.xhtml#Chapter-2][SICP Ch. 2]].
+
+#+begin_src lisp
+(cons 'a 'b) ;;=> ('a . 'b)
+#+end_src
+
+It's typically denoted with a period in between the two objects like so =(<object-a> . <object-b>)=
+
+Typically, a cons pair can depicted in a box and pointer diagram like this[fn:1]:
+
+#+NAME: Fig. 2.2 from SICP, unofficial ebook
+[[https://raw.githubusercontent.com/sarabander/sicp/master/html/fig/chap2/Fig2.2e.std.svg]]
+
++ A piece of data (the first part of the pair)
++ Another piece of data (the second part of the pair)
++ The pointers to two pieces of data, which constitute the actual constructed object of a cons pair
+
+All a cons pair really is just two pointers. So in memory we just have to put two things:
+0) The pointer to the first object.
+1) The pointer to the second object
+
+Now it's kind of a magical thing that you can use these pairs to generate lists, and trees, and numerical representations, and all sorts of crazy things! For instance, here's how you represent lists:
+
+[[https://raw.githubusercontent.com/sarabander/sicp/master/html/fig/chap2/Fig2.4e.std.svg]]
+
+It's just:
+
+#+begin_src scheme
+(cons 1 (cons 2 (cons 3 (cons 4 nil))))
+#+end_src
+
+And that becomes:
+#+begin_src scheme
+'(1 2 3 4)
+#+end_src
+
+Amazing, right!?
+
+*** Tagging a cons cell
+Now, we're going to tag the cons pair as such:
++----------------+-----------+
+|Pointer Type    |Pointer tag|
++----------------+-----------+
+|cons cell       |#b11000001 |
++----------------+-----------+
+** Procedural Data
+Now why do we have to have a tag for procedural data in our pointers? Because we're leaving the door open for an (optional) complication to lisp evaluation. Here's an example:
 
 This is what happens in most lisps when you do this:
 #+begin_src lisp
@@ -96,50 +162,10 @@ some-fn:
 [[https://diveintosystems.org/book/C9-ARM64/functions.html][This resource]] was very helpful in understanding how one might handle procedure calls.
 ** Caveat Hacker
 I haven't run any of the code in this post. We won't really be able to until we get a REPL going. So, if you're reading this, and see an error, please feel free to mention it in the github repo.
+* nil (∅) and true (⊤)
+Defined above as 0 and 1.
 * cons (ζ)
 Let's start simple, the absolute simplest we can get: A cons pair.
-
-** What's a Cons Pair?
-In any lisp, the core method of constructing data, the core primitive of all data structures, is the cons pair. See [[https://sarabander.github.io/sicp/html/Chapter-2.xhtml#Chapter-2][SICP Ch. 2]].
-
-#+begin_src lisp
-(cons 'a 'b) ;;=> ('a . 'b)
-#+end_src
-
-It's typically denoted with a period in between the two objects like so =(<object-a> . <object-b>)=
-
-Typically, a cons pair can depicted in a box and pointer diagram like this[fn:1]:
-
-#+NAME: Fig. 2.2 from SICP, unofficial ebook
-[[https://raw.githubusercontent.com/sarabander/sicp/master/html/fig/chap2/Fig2.2e.std.svg]]
-
-+ A piece of data (the first part of the pair)
-+ Another piece of data (the second part of the pair)
-+ The pointers to two pieces of data, which constitute the actual constructed object of a cons pair
-
-All a cons pair really is just two pointers. So in memory we just have to put two things:
-0) The pointer to the first object.
-1) The pointer to the second object
-
-Now it's kind of a magical thing that you can use these pairs to generate lists, and trees, and numerical representations, and all sorts of crazy things! For instance, here's how you represent lists:
-
-[[https://raw.githubusercontent.com/sarabander/sicp/master/html/fig/chap2/Fig2.4e.std.svg]]
-
-It's just:
-
-#+begin_src scheme
-(cons 1 (cons 2 (cons 3 (cons 4 nil))))
-#+end_src
-
-And that becomes:
-#+begin_src scheme
-'(1 2 3 4)
-#+end_src
-
-Amazing, right!?
-
-So how do we actually translate that out to the machine?
-
 ** What is a Cons Pair to Your Computer? And what is cons?
 A cons pair is a pair of pointers. That's it. It takes 128 bits of memory, and we allocate it on the stack[fn:2]. The procedure =cons= just returns the tagged pointer to this 128 bit span of memory. The tagged pointer itself is just the address of the pointers on the stack, with the last couple of bits flipped to the tag of a cons pair. Adding 3 to the memory address has the same effect.
 
@@ -160,13 +186,20 @@ cons:
   We'll put the pointers to evaluated arguments
   in the same registers (x0, x1) as they came to us */
 
- /* Getting the tagged pointer to our cons pair:
-    We add 32 to the stack pointerto get the address
-    of our cons pair and add 3 to flip the last two
-    bits to #b011. Hence, we add 35.*/
-    add x0, [sp], #35
+ /* Get the tagged pointer to our cons pair */
+    add x0, [sp], #16
 
-    ret /* return to point in x30 */
+ /* Add our pointer tag. */
+    mov x1, #b11000001
+    lsl x1, #56
+    add x0, x1
+
+ /* set x1 to nil */
+    mov x1, #b01010010
+    lsl x1, #56
+
+ /* return the pointer to our cons pair */
+    ret
 #+end_src
 
 * car (α)
@@ -175,7 +208,10 @@ The car is the first object in your cons-pair. Like so:
 (car ('a . 'b)) ;;=> 'a
 #+end_src
 
-The procedure for =car= should return the pointer stored in the first 64 bits of the cons-pair's memory address. Remember, this address is just the value of the tagged pointer, minus the tag itself.
+The procedure for =car= should return the pointer stored in the first 64 bits of the cons-pair's memory address. Remember, this address is just the value of the pointer with a different tag.
+
+But there are a couple edge cases here. The first is =(car nil)= which should return =nil=. The second is trying to call car on something that isn't a cons pair, in which case we /should/ throw an error. But since we don't have an exception handling method yet, we'll just return nil for now.
+
 #+begin_src asm
     .text
     .global car
@@ -187,16 +223,26 @@ car:
     the pointer given to us in x0, to make sure it
     points to a cons pair.*/
 
- /* First we subtract the tagged pointer of cons pair
-    in order to get the memory address of the cons-pair.
-    Then we load the value stored at that address into x0. */
-    sub x0, x0, #3
+ /* check the tag */
+    lsr x1, x0 #56
+    cmp x1, #b11000001
+
+ /* set x1 to nil */
+    mov x1, #b01010010
+    lsl x1, #56
+
+ /* load our prospective car from memory */
     ldr x0, x0
 
-    ret /* return to point in x30 */
+ /* if you tried to cons something that wasn't a pair,
+    set x0 to nil */
+    mov x0, x1
+
+ /* return the pointer to the first value in the pair */
+    ret
 #+end_src
 
-Now if you read that, beyond all the boilderplate, it's just =sub x0, x0, #3= which removes the tag telling us the address is to a cons-pair, and =ldr x0, x0= which loads the return value into =x0=. We don't even bother storing the argument to =car= on the stack. =cdr= is similar:
+=cdr= is similar:
 * cdr (ω)
 The cdr of a cons-pair is the second object stored in a cons-pair. Hence, =cdr= returns the second pointer stored in the 128 bits of a cons-pair in memory.
 So this:
@@ -210,51 +256,27 @@ Becomes this:
 cdr:
   /* <evaluation of arguments goes here>
     We'll put the pointers to evaluated arguments
-    in the same register x0 as they came to us.
-    This is also where we would check the tag of
-    the pointer given to us in x0, to make sure it
-    points to a cons pair.*/
+    in the same register x0 as they came to us. */
 
- /* We'd subtract 3 from the tagged pointer to get the
-    memory address of the cons-pair, then we'd add 8 to get
-    the address of the second value. So we add 5.*/
-    add x0, x0, #5
-    ldr x0, x0
+ /* check the tag */
+    lsr x1, x0 #56
+    cmp x1, #b11000001
 
-    ret /* return to point in x30 */
+ /* set x1 to nil */
+    mov x1, #b01010010
+    lsl x1, #56
+
+ /* load our prospective cdr from memory */
+    ldr x0, x0, #8
+
+ /* if you tried to cons something that wasn't a pair,
+    set x0 to nil */
+    mov x0, x1
+
+ /* return the pointer to the second value in the pair */
+    ret
 #+end_src
 As I said, similar.
-
-* nil (∅) and true (⊤)
-In accord with the boolean pointer tagging we defined earlier:
-+ =true (⊤)= is defined as =#b1010=
-+ =nil (∅)= is defined as =#b0010=
-* eq (=)
-Equality in lisp is a problem full of pitfalls, and we are in too early a stage to actually approach it. As such, for our purposes, equality consists of no more than a comparison of two pointers. Remember, this is a preliminary lisp, an assembly lisp if you will. We're just trying to get to a better low-level language than assembly.
-
-Taking only the case of two arguments, we can use something along these lines:
-#+begin_src asm
-    .text
-    .global eq
-eq:
- /* store the arguments on the stack*/
-    stp x0, x1 [sp, #-16]!
-
-  /* <evaluation of arguments goes here>
-    We'll put the pointers to evaluated arguments
-    in the same register x0 as they came to us.
-    This is also where we would check the tag of
-    the pointer given to us in x0, to make sure it
-    points to a cons pair.*/
-
-    cmp x0, x1 /* this sets a condition flag */
-    moveq x0, #10 /* conditional set x0 to #b1010 if equal */
-    movnq x0 #2 /* conditional set x0 to #b0010 if not equal */
-
-    ret /* return to point in x30 */
-
-#+end_src
-
 * cond (χ)
 Cond is a procedure that takes a list of those functions that takes an unlimited number of unevaluated pairs of forms (just groups of two, not cons pairs), comprising of a conditional and a result. In our little, clojure-like dialect of lisp, it looks something like this:
 #+begin_src lisp
@@ -275,16 +297,18 @@ cond:
     stp x29, x30, [sp], #-16
 
  /* Check if the argument list in x7 is nil. */
-    cmp x7, #4    /* #4 is the decimal notation for #b0010
-                     which is our tagged pointer for nil*/
+ /* set x6 to nil and compare with x7 */
+    mov x6, #b01010010
+    lsl x6, #56
+    cmp x7, x6
 
  /* Set our return value to zero if the arglist is nil */
-    moveq x2, #0  /* put a zero value in x0 for the
+    moveq x2, #0  /* put a zero value in x2 for the
                      conditional to follow if args are nil */
-    moveq x0, #4  /* put nil in x0 if the args are nil */
+    moveq x0, x6  /* put nil in x0 if the args are nil */
 
  /* Get the first conditional argument if the args are not nil */
-    movnq x2, #1  /* put a nonzero value in x0 for the
+    movnq x2, #1  /* put a nonzero value in x2 for the
                      conditional to follow if args not nil*/
     str x0, x7    /* put the pointer to our list in x0
                      so car knows the location of our argument
@@ -295,7 +319,7 @@ cond:
  /* evaluation of the conditional in x0 goes here */
 
  /* Check if the evaluated conditional in x0 is truthy */
-    cmp x0, #4    /* remember #4 is #b0010 which is nil */
+    cmp x0, x6    /* remember #4 is #b0010 which is nil */
 
  /* If truthy, set x2 to non-zero for following conditional branch,
     otherwise set x2 to zero.*/
