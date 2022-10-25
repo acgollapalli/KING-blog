@@ -142,7 +142,7 @@ some-fn:
     /* store all the arguments on the stack*/
     stp x0, x1 [sp, #-16]!
     stp x2, x3 [sp, #-16]!
-    str x4 [sp, #-16]
+    str x4 [sp, #-16]!
 
     /* getting the arguments for some-stuff and calling it */
     ldr x0, [sp], #42         // get x1 (second arg)
