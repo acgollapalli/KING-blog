@@ -53,6 +53,7 @@ Let's remind ourselves of our  categories:
 |structured data    |#b110xxxxx |
 +-------------------+-----------+
 
+
 Let's add a couple conditions:
 + If the most significant bit is 0, then the pointer refers to a value. That means that it should evaluate to itself.
 + If the fourth most significant bit of a value type is 1, that means that the value is directly encoded in the pointer itself. This also means that bits 55-0 are to be used for the value itself.
@@ -273,6 +274,10 @@ apply:
     come back to them later.*/
     stp x0, x1, [sp, #-16]!
 
+ /* let's evaluate our first argument */
+    bl eval
+    str x0 [sp] #16
+
  /* Let's get the required arguments and whether we have
     an optional list of arguments of unlimited length */
     bl args
@@ -383,13 +388,64 @@ _handle_symbol;
 
     movz x1, x1, #1
 
+    mov x2, x16
     blnz x1, _deref_symbol
 
     ret
 _deref_symbol:
+ /* set our argument to x1 and
+    put our environment stack in x0 */
+    mov x1, x0
+    mov x0, x2
 
+ /* set x3 to nil */
+    mov x3, #b01010001
+    lsl x3, #56
+
+ /* set x4 to nil */
+    mov x4, #b01010001
+    lsl x4, #56
+
+ /* search the most local environment in scope */
+    blr car
+    blr _search_alist
+
+ /* check if we found our reference */
+    xor x3, x0
+
+ /* if x3 is zero, _search_alist returned nil */
+    movz x3, x0, x2
+    blz x3, cdr
+    xor x4, x0
+
+ /* if x4 is zero then we're at the top level environment */
+    bz x4, _handle_undefined_symbol
+
+ /* if we've gotten here, we haven't branched.
+    that means we're not at the top-level environment
+    if x3 is zero, then we need to recur */
+    movz x3, x2, x0
+    bz x3, _deref_symbol
+
+ /* and if we've gotten here, that means that _search_alist
+    found the symbol we wanted, and has returned a non-nil
+    pointer to that symbol's entry in its environment */
+    bl cdr
+    ret
+
+_search_alist:
+
+_handle_undefined_symbol:
 #+end_src
 *** Cons?
+#+begin_src asm
+_handle_cons:
+    bl cdr
+    mov x1, x0
+    bl apply
+
+    ret
+#+end_src
 ** eval itself
 thus eval becomes something like:
 #+begin_src asm
