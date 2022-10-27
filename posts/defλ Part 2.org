@@ -110,7 +110,6 @@ Procedures can also be quoted. How, you ask? Because if you can pass along a pro
 +-----------------+-----------+
 |quoted procedure |#b1001xxxx |
 +-----------------+-----------+
-
 ** Cons Pairs (again)
 Now, let's reapproach the cons-pair, since we have a 6 bit memory tag now, and since we have to deal with quoting. Now, as any lisp hacker knows, you can quote a list and send it to eval, and have it return exactly that list. And since we defined a type for quoted symbol, we may as well also define a type for quoted cons-pairs. This has some nice consequences (no pun intended).
 +-----------------+-----------+
@@ -251,103 +250,6 @@ unquote:
 
     ret
 #+end_src
-* apply (Λ)
-Okay, now we get to the fun stuff. If you were paying attention to the last post, you would have noticed something kind of... off. Namely, the evaluation steps were included in the example code for the procedures. Now for =cond=, this makes sense. In most lisps, =cond= is a special form. But here =cond= is not a special form. There are no special forms in this lisp. Instead, evaluation is controlled at the level of the function, and not at the level of =apply=. I think this gives a programmer a lot of flexibility. It blurs the line between function and macros and gets rid of the pesky problem of not having first-class macros in your lisp. Obviously, there are tradeoffs here. But I think this is the right way to go about it. We'll look at the syntax of how this looks from a programmer perspective when we get to =lambda=, but for now let's look at =apply=.
-
-=apply= takes two arguments: a procedure (or a symbol pointing to a procedure), and a list of arguments.
-
-Now, we stated part of this last time, but we'll add to it this time:
-+ For procedures which take an unlimited number of arguments, it must receive a list of arguments in register x7.
-+ For procedures which take a number of required, positional arguments, and then an unlimited number of optional arguments, the arguments will be placed in registers x0-5 and the succeeding arguments placed in a list in x7.a
-+ (For now!) procedures may only have 7 required arguments.
-
-Actually, wait, I forgot one very important thing: how does apply know how many arguments a procedure takes, and which registers to put the arguments in? I don't know. Let's just pretend that there's a magical function we haven't written yet that returns the number of required, positional arguments in =x0= and whether the function has an unlimited number of arguments in =x2=. We'll just call this: =args=.
-
-#+begin_src asm
-    .text
-    .global apply
-apply:
- /* store the stack pointer and return address */
-    stp x29, x30, [sp, #-16]!
-
- /* Let's save our procedure and argument list. That way we can
-    come back to them later.*/
-    stp x0, x1, [sp, #-16]!
-
- /* let's evaluate our first argument */
-    bl eval
-    str x0 [sp] #16
-
- /* Let's get the required arguments and whether we have
-    an optional list of arguments of unlimited length */
-    bl args
-
- /* Now we're going to store the number of arguments in x6 */
-    mov x6, x0
-
-    ldr x7, [sp, #8] /* get the argument list */
-    mov x0, x7
-
- /* storing the first argument to keep x0 free */
-    cmp x6, #0
-    blgt car /* call car if number of arguments > 0*/
-    str x0, [sp, #-16]! /* store first arg on stack */
-    sub x6, x6, #1 /* decrement number of required args */
-    bleq cdr         /* call cdr on our arglist */
-    mov x7, x0     /* keep our arglist in x7*/
-
- /* and now some iteration */
-    bl apply_iterator
-    mov x1, x0
-    bl apply_iterator
-    mov x2, x0
-    bl apply_iterator
-    mov x3, x0
-    bl apply_iterator
-    mov x4, x0
-    bl apply_iterator
-    mov x5, x0
-    bl apply_iterator
-    mov x6, x0
-
- /* now our argument list is in x7 and x1-5 have their
-    respective arguments, let's get the first arg in x0 */
-    ldr x0, [sp, #8]
-
- /* Let's get back our actual procedure we'll put it in x16*/
-    ldr x16, [sp, #32]
-
- /* And let's free up the stack */
-    add sp, sp, #32
-
- /* arguments 1-7 (or nils) are in regists x0-x6, and the rest of the arguments
-    are in x7. It's time to actually call our procedure with all its arguments */
-    blr x16
-
- /* Get back the stack pointer and return address */
-    ldp x29, x30, [sp], #16
-
- /* and return */
-    ret
-
-apply_iterator:
-    cmp x6, #0       /* let's see if we need another arg */
-    mov x0, x7
-    blgt car         /* call car if number of arguments > 0*/
-    moveq x0, #4     /* set x0 to nil of x6 = 0 */
-    bleq cdr         /* call cdr on our arglist */
-    moveq x7, x0     /* keep our arglist in x7 if it calls for iteration */
-    sub x6, x6, #1   /* decrement number of required args */
-#+end_src
-* lambda (λ)
-#+begin_src asm
-    .text
-    .global lambda
-lambda:
-
-
-
-#+end_src
 * eval (Ξ)
 
 Eval has to handle a few different cases. Generally speaking, each case is a case of typechecking and branching.
@@ -459,4 +361,129 @@ eval:
     blz x1, _handle_symbol
     blz x1, _handle_cons
 
+#+end_src
+* lambda (λ)
+Lambda returns a procedure. As such we need to take some time to discuss what a procdure is.
+** Procedures
+We've discussed the function calling ABI we're using, which is the AArch64 ABI for the ARMv8 instruction set. And we've alluded to how we actually call procedures when we defined =apply=. However, it's time to discuss what a procedure is explicitly in it's structure.
+
+First off, a procedure has three attributes:
++ its positional argument list.
++ its local environment
++ its actual procedure
+
+=lambda= returns a 3 element list with pointers to each.
+
+*** The positional argument list
+We could, theoretically, include the number of arguments, and whether it takes an argument list inside the second half of our type tag on our pointer. However, this precludes us from later including typedata in our argument list for more strongly typed procedures. It also precludes us from including other metadata about our arguments. As such, our positional argument list will, for right now, begin with a cons-pair with an integer and a boolean, the integer will be between 0 and 7, and the boolean will state whether or not we expect an unbounded list of arguments to be included in our arguments. The next elements will consist of pointers to the respective entry in the local environment for each of the environments. If an argument list of unbounded length is an expected input, the pointer for it will be the last value in the list, cons'ed to nil.
+*** The local environment
+As we discussed earlier, the environments are passed to eval in a stack. However, in order to define variables, we create a new local environment which is consed onto the environment stack at evaluation time, and is retained because that is what the symbols defined within the lambda point to. As such, the environment is included as part of the procedure definition. This also means that any symbols not redefined each time the function is run retain their values, making procedures generated by =lambda= potentially stateful.
+*** The actual procedure
+This is the location in memory of the procedure defined by lambda.
+** What does lambda expect? And what does it do?
+Lambda expects:
++ An argument list, consisting of a list of symbols. If the last symbol begins with =&= this denotes that it represents a list of unbounded length
++ A list of statements, the last of which is the return value.
+
+Lambda does:
++ create a local environment, based off the argument list
++ assign the variables from their respective registers into the local environment
++ evaluates each statement passed to it, with the local environment on the environment stack
++ passes the unmutated environment it initially received
++ returns the last value returned by the final statement it was given
+** Implementing lambda
+#+begin_src asm
+    .text
+    .global lambda
+lambda:
+
+
+#+end_src
+* apply (Λ)
+Okay, now we get to the fun stuff. If you were paying attention to the last post, you would have noticed something kind of... off. Namely, the evaluation steps were included in the example code for the procedures. Now for =cond=, this makes sense. In most lisps, =cond= is a special form. But here =cond= is not a special form. There are no special forms in this lisp. Instead, evaluation is controlled at the level of the function, and not at the level of =apply=. I think this gives a programmer a lot of flexibility. It blurs the line between function and macros and gets rid of the pesky problem of not having first-class macros in your lisp. Obviously, there are tradeoffs here. But I think this is the right way to go about it. We'll look at the syntax of how this looks from a programmer perspective when we get to =lambda=, but for now let's look at =apply=.
+
+=apply= takes two arguments: a procedure (or a symbol pointing to a procedure), and a list of arguments.
+
+Now, we stated part of this last time, but we'll add to it this time:
++ For procedures which take an unlimited number of arguments, it must receive a list of arguments in register x7.
++ For procedures which take a number of required, positional arguments, and then an unlimited number of optional arguments, the arguments will be placed in registers x0-5 and the succeeding arguments placed in a list in x7.a
++ (For now!) procedures may only have 7 required arguments.
+
+Actually, wait, I forgot one very important thing: how does apply know how many arguments a procedure takes, and which registers to put the arguments in? I don't know. Let's just pretend that there's a magical function we haven't written yet that returns the number of required, positional arguments in =x0= and whether the function has an unlimited number of arguments in =x2=. We'll just call this: =args=.
+
+#+begin_src asm
+    .text
+    .global apply
+apply:
+ /* store the stack pointer and return address */
+    stp x29, x30, [sp, #-16]!
+
+ /* Let's save our procedure and argument list. That way we can
+    come back to them later.*/
+    stp x0, x1, [sp, #-16]!
+
+ /* let's evaluate our first argument */
+    bl eval
+    str x0 [sp] #16
+
+ /* Let's get the required arguments and whether we have
+    an optional list of arguments of unlimited length */
+    bl args
+
+ /* Now we're going to store the number of arguments in x6 */
+    mov x6, x0
+
+    ldr x7, [sp, #8] /* get the argument list */
+    mov x0, x7
+
+ /* storing the first argument to keep x0 free */
+    cmp x6, #0
+    blgt car /* call car if number of arguments > 0*/
+    str x0, [sp, #-16]! /* store first arg on stack */
+    sub x6, x6, #1 /* decrement number of required args */
+    bleq cdr         /* call cdr on our arglist */
+    mov x7, x0     /* keep our arglist in x7*/
+
+ /* and now some iteration */
+    bl apply_iterator
+    mov x1, x0
+    bl apply_iterator
+    mov x2, x0
+    bl apply_iterator
+    mov x3, x0
+    bl apply_iterator
+    mov x4, x0
+    bl apply_iterator
+    mov x5, x0
+    bl apply_iterator
+    mov x6, x0
+
+ /* now our argument list is in x7 and x1-5 have their
+    respective arguments, let's get the first arg in x0 */
+    ldr x0, [sp, #8]
+
+ /* Let's get back our actual procedure we'll put it in x17 */
+    ldr x17, [sp, #32]
+
+ /* And let's free up the stack */
+    add sp, sp, #32
+
+ /* arguments 1-7 (or nils) are in regists x0-x6, and the rest of the arguments
+    are in x7. It's time to actually call our procedure with all its arguments */
+    blr x17
+
+ /* Get back the stack pointer and return address */
+    ldp x29, x30, [sp], #16
+
+ /* and return */
+    ret
+
+apply_iterator:
+    cmp x6, #0       /* let's see if we need another arg */
+    mov x0, x7
+    blgt car         /* call car if number of arguments > 0*/
+    moveq x0, #4     /* set x0 to nil of x6 = 0 */
+    bleq cdr         /* call cdr on our arglist */
+    moveq x7, x0     /* keep our arglist in x7 if it calls for iteration */
+    sub x6, x6, #1   /* decrement number of required args */
 #+end_src
