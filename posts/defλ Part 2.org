@@ -68,7 +68,7 @@ Let's define a few numerical types, although the only ones we're actually going 
 |floating point |#b00101001 |
 +---------------+-----------+
 
-The small int only allows for signed values. Actually all the data types do right now. Perhaps someone better informed can inform me of the value of unsigned numbers, but as of right now, I do not know it, so I'm not going to worry about them. That said: if we need them, we can stipulate that the 5th least significant bit implies that the pointer refers to a signed number.
+The small int only allows for signed values. Actually all the data types do right now. Perhaps someone better informed can inform me of the value of unsigned numbers, but as of right now, I do not know it, so I'm not going to worry about them. That said: if we need them, we can stipulate that a value of 1 in the 5th most significant bit implies that the pointer refers to a signed number.
 
 We're going to ignore big ints and floating points for now.
 
@@ -91,24 +91,23 @@ Strings are like arrays of characters. We could encode them on a single continuo
 Keywords are just strings with different pointer tags.
 
 ** Symbolic Data
- Symbols are just strings cons'd to pointers. Again, this is just temporary for right now. I'm trying to keep things simple. We'll do this right soon enough.
-
- Quoted symbols are just symbols with a different pointer tag.
+Symbols are essentially strings that are associated to a lisp object in the your evaluation environment. We'll get to environments in a second.
+Quoted symbols are just symbols with a different pointer tag.
 +-----------------+-----------+
 |Pointer Type     |Pointer tag|
 +-----------------+-----------+
-|symbol           |#b001001   |
+|symbol           |#b1010xxxx |
 +-----------------+-----------+
-|quoted symbol    |#b011001   |
+|quoted symbol    |#b1011xxxx |
 +-----------------+-----------+
 ** Procedural Data
 Procedures can also be quoted. How, you ask? Because if you can pass along a procedure, you can put it in a list. And if you can put it in a list, then it be passed to eval. And if it can be passed to eval as an object, and its something that could be called as a procedure, then it is quoteable.
 +-----------------+-----------+
 |Pointer Type     |Pointer tag|
 +-----------------+-----------+
-|procedure        |#b000001   |
+|procedure        |#b1000xxxx |
 +-----------------+-----------+
-|quoted procedure |#b000001   |
+|quoted procedure |#b1001xxxx |
 +-----------------+-----------+
 
 ** Cons Pairs (again)
@@ -116,17 +115,141 @@ Now, let's reapproach the cons-pair, since we have a 6 bit memory tag now, and s
 +-----------------+-----------+
 |Pointer Type     |Pointer tag|
 +-----------------+-----------+
-|cons pair        |#b11000001 |
+|cons pair        |#b11000000 |
 +-----------------+-----------+
-|quoted cons pair |#b11010001 |
+|quoted cons pair |#b11010000 |
 +-----------------+-----------+
 Okay, on to the meat of the article.
+
+** Evaluation
+Evaluation is the process of taking a lisp object, and potentially running it as a procedure. There's a few things we need to consider here when dealing with evaluation.
+
+First, what happens when you get a symbol? What is a symbol really? When we get a list to evaluate, we don't just a cons pair of a pointer to the procedure and a pointer to the arguments. We get a symbol, or rather a pointer to a symbol, and that symbol has a pointer to a procedure (or possibly another symbol), which then becomes an argument to another call to eval.
+
+In addition, symbols are not defined globally. We have this thing called lexical closure, which means we can define symbols locally, such as within the context of a let block or a lambda, as well as within a top level environment. And locally defined symbols are not accessible outside their respective environments (or scopes). So how do we manage that? Well, the answer is that each function call has its own environment, with its own separate symbol table, and we search through bigger and bigger symbol tables from the smallest scope through to its enclosing scope and all the way through to the top level environment, until we find our symbol. And that brings us to another convention or way of doing things we need to discuss:
+** Environments
+For now, an environment is basically an association list, that is to say, a list of cons pairs each of which consist of a symbol, and what that symbol refers to. They're the symbol tables described above. The environment for the evaluation of any particular function is passed to =eval= so that it can check the meanings of symbols. Functions like =let= and =lambda=, store a pointer to the existing evaluation context, modify the evaluation context they're contained in, send the modified evaluation context to eval and when they're done, return both the value that they're actually passing and the original evaluation context to the calling function. On the other hand, proecdures like =def= modify the environment, and return the modified environment to the calling function.
+
+For instance:
+#+begin_src lisp
+(def a 1)
+
+((lambda [b]
+  (def a b)
+  (print a)) 2)
+
+(print a)
+#+end_src
+
+The above code, when run, would print:
+#+begin_src
+2
+1
+#+end_src
+
+The reason is because =a= is added to the top-level environment as 1 and only changed to 2 within the context of the following lambda.
+
+Now as a smart programmer, I'm sure you're thinking to yourself, "Okay, well that's all fine and dandy. But what happens when you modify what an already defined symbol is associated with in the scope of a function? If you change what the reference for the symbol is pointed to, haven't you changed the top-level environment as well?" Well, I'm glad you asked. You're right, an environment /can't/ be an association list, because modifying a variable within a smaller scope would modify it everywhere. So instead of a single association list, we make the environment a /list/ of association lists. And =eval=, when it's trying to put a pointer to a name, looks at each association list in turn, from the nearest in scope to the furthest in scope. =def=, in turn, only modifies or adds to the association list nearest to it in scope, which will be the =car= of the enviroment list. =let= and =lambda= add new association lists (their local environments) to the environment list. This means that the environment we pass to =eval= is actually a stack of environments, each of which carries new definitions.
+
+Let's take another potential case which occurs commonly in lisp programming: using an undefined symbol.
+#+begin_src lisp
+(defλ f
+  [x]
+  (g x))
+
+(defλ g
+  [x]
+  (inc x))
+
+(f 1)
+#+end_src
+
+Now, in say clojure, this would throw an error, because =g= is not defined. However, in our little lisp, we want that code to actually work. In other words, we want for our references to be well-defined at the time a procedure is run, not necessarily at the time the procedure is defined. So the way to do this is to add the symbol to the top-level environment with a value of nil. This also has the consequence that we cannot safely delete nil-valued symbols from our top-level environment. This will be revisited when I am smarter.
+
+It's worth pointing out that association lists are slow compared to, say, hashmaps, but they're simple to implement. So that's what we're going to use for right now. I promise we'll be using hashmaps once we actually have an implementation.
+
+Finally: /We're assuming the environment is passed along in register =x16=./
+
 * quote (') and unquote (~)
 Because the only things you can quote (or should quote) are things that evaluate to something other than themselves. So far we have followed the convention that all things that do not evaluate to themselves have a least significant bit of 1. We'll now state this properly:
-+ All quoteable data types have a least significant bit of 1 in their data type.
-+ If an item is quotable, then the fourth least significant bit of its pointer is dedicated to declaring the items status as quoted or not quoted.
++ All quoteable data types have a value of 1 in their most significant bit (bit 63).
++ If an item is quotable, then the fourth most significant bit (bit 59) of its pointer is dedicated to declaring the items status as quoted or not quoted.
 
-  As such =quote (')= simply checks the least significant bit, and if it is 1, sets the fourth least significant bit to 1. Similarly =unquote (~) checks the least significant bit, and sets the fourth least significant bit to 0.
+  As such =quote (')= simply checks the most significant bit, and if it is 1, sets the fourth most significant bit to 1. Similarly =unquote (~) checks the most significant bit, and sets the fourth most significant bit to 0.
+  Let's write a few functions:
+
+*** quote (')
+#+begin_src asm
+    .text
+    .global quote
+quote:
+ /* check if x0 is quotable */
+    mov x1, x0
+    lsr x1, #63
+
+ /* if x0 is quotable, check if it is quoted */
+    movnz x1, x1, x0
+    lsr x1, #4
+    lsr x1, #63
+
+ /* if x0 is not quoted, quote it. */
+    movz x1, x2, x0
+    mov x3, #1
+    lsr x3, #59
+    xor x2, x3
+    movz x1, x0, x2
+
+ /* set x1 to nil */
+    mov x1, #b01010001
+    lsl x1, #56
+
+ /* set x2 to nil */
+    mov x2, #b01010001
+    lsl x2, #56
+
+ /* set x3 to nil */
+    mov x3, #b01010001
+    lsl x3, #56
+
+    ret
+#+end_src
+
+*** unquote (~)
+Unquote is very similar to quote
+#+begin_src asm
+    .text
+    .global unquote
+unquote:
+ /* check if x0 is quotable */
+    mov x1, x0
+    lsr x1, #63
+
+ /* if x0 is quotable, check if it is unquoted */
+    movnz x1, x1, x0
+    lsr x1, #4
+    lsr x1, #63
+
+ /* if x0 is not quoted, quote it. */
+    movnz x1, x2, x0
+    mov x3, #1
+    lsr x3, #59
+    xor x2, x3
+    movnz x1, x0, x2
+
+ /* set x1 to nil */
+    mov x1, #b01010001
+    lsl x1, #56
+
+ /* set x2 to nil */
+    mov x2, #b01010001
+    lsl x2, #56
+
+ /* set x3 to nil */
+    mov x3, #b01010001
+    lsl x3, #56
+
+    ret
+#+end_src
 * apply (Λ)
 Okay, now we get to the fun stuff. If you were paying attention to the last post, you would have noticed something kind of... off. Namely, the evaluation steps were included in the example code for the procedures. Now for =cond=, this makes sense. In most lisps, =cond= is a special form. But here =cond= is not a special form. There are no special forms in this lisp. Instead, evaluation is controlled at the level of the function, and not at the level of =apply=. I think this gives a programmer a lot of flexibility. It blurs the line between function and macros and gets rid of the pesky problem of not having first-class macros in your lisp. Obviously, there are tradeoffs here. But I think this is the right way to go about it. We'll look at the syntax of how this looks from a programmer perspective when we get to =lambda=, but for now let's look at =apply=.
 
@@ -144,11 +267,11 @@ Actually, wait, I forgot one very important thing: how does apply know how many 
     .global apply
 apply:
  /* store the stack pointer and return address */
-    stp x29, x30, [sp], #-16
+    stp x29, x30, [sp, #-16]!
 
  /* Let's save our procedure and argument list. That way we can
     come back to them later.*/
-    stp x0, x1, [sp], #-16
+    stp x0, x1, [sp, #-16]!
 
  /* Let's get the required arguments and whether we have
     an optional list of arguments of unlimited length */
@@ -157,17 +280,16 @@ apply:
  /* Now we're going to store the number of arguments in x6 */
     mov x6, x0
 
-    ldr x7, [sp, #16] /* get the argument list */
+    ldr x7, [sp, #8] /* get the argument list */
     mov x0, x7
 
  /* storing the first argument to keep x0 free */
     cmp x6, #0
     blgt car /* call car if number of arguments > 0*/
-    str x0, [sp, #-16] /* store first arg on stack */
+    str x0, [sp, #-16]! /* store first arg on stack */
     sub x6, x6, #1 /* decrement number of required args */
     bleq cdr         /* call cdr on our arglist */
     mov x7, x0     /* keep our arglist in x7*/
-
 
  /* and now some iteration */
     bl apply_iterator
@@ -212,5 +334,73 @@ apply_iterator:
     moveq x7, x0     /* keep our arglist in x7 if it calls for iteration */
     sub x6, x6, #1   /* decrement number of required args */
 #+end_src
+* lambda (λ)
+#+begin_src asm
+    .text
+    .global lambda
+lambda:
+
+
+
+#+end_src
 * eval (Ξ)
-Okay, here comes the hard bit. Eval is
+
+Eval has to handle a few different cases. Generally speaking, each case is a case of typechecking and branching.
+** Cases
+We keep x1 as a special register for these subroutines. If x1 is zero, we proceed handling that case. If x1 is not zero, we leave it alone.
+*** Value?
+#+begin_src asm
+_handle_value:
+    mov x0, x1
+    lsr x1, #63
+    xor x1, #1
+
+    ret
+#+end_src
+*** Quoted?
+#+begin_src asm
+_handle_quoted:
+ /* let's store our variable */
+    str x0, [sp, #-16]!
+
+    bl unquote
+
+    ldr x1, [sp], #16
+    xor x1, x0
+
+    add [sp], #16
+    ret
+#+end_src
+
+*** Symbol?
+#+begin_src asm
+_handle_symbol;
+    str x0, [sp, #-16]!
+
+    mov x0, x1
+    lsr x1, #61
+    xor x1, #b101
+
+    movz x1, x1, #1
+
+    blnz x1, _deref_symbol
+
+    ret
+_deref_symbol:
+
+#+end_src
+*** Cons?
+** eval itself
+thus eval becomes something like:
+#+begin_src asm
+eval:
+ /* store the stack pointer and return address */
+    stp x29, x30, [sp, #-16]!
+    mov x1, #0
+
+    blz x1, _handle_value
+    blz x1, _handle_quoted
+    blz x1, _handle_symbol
+    blz x1, _handle_cons
+
+#+end_src

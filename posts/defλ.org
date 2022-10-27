@@ -175,7 +175,7 @@ Boolean values, with values encoded in the pointer as described [[*Displayable V
 * cons (ζ)
 Let's start simple, the absolute simplest we can get: A cons pair.
 
-A cons pair is a pair of pointers. That's it. It takes 128 bits of memory, and we allocate it on the stack[fn:2]. The procedure =cons= just returns the tagged pointer to this 128 bit span of memory. The tagged pointer itself is just the address of the pointers on the stack, with the last couple of bits flipped to the tag of a cons pair. Adding 3 to the memory address has the same effect.
+A cons pair is a pair of pointers. That's it. It takes 128 bits of memory, and we allocate it on the stack[fn:2]. The procedure =cons= just returns the tagged pointer to this 128 bit span of memory. The tagged pointer itself is just the address of the pointers on the stack, with the appropriate memory tag.
 
 So this:
 
@@ -302,7 +302,7 @@ Let's try to implement it:
     .global cond
 cond:
  /* store the stack pointer and return address */
-    stp x29, x30, [sp], #-16
+    stp x29, x30, [sp, #-16]!
 
  /* Check if the argument list in x7 is nil. */
  /* set x6 to nil and compare with x7 */
